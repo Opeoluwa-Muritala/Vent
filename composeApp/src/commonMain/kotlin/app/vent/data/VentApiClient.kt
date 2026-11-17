@@ -14,7 +14,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 interface VentApi {
-    suspend fun login(email: String, password: String): AuthResponse
+    suspend fun requestOtp(email: String): OtpRequestResponse
+    suspend fun verifyOtp(email: String, code: String): AuthResponse
     suspend fun events(): List<EventDto>
     suspend fun hall(id: String): HallDto
     suspend fun seats(sessionId: String, since: Long? = null): SeatSnapshotDto
@@ -25,7 +26,14 @@ interface VentApi {
 
 class VentApiClient(private val baseUrl: String, private val client: HttpClient = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false }) } }) : VentApi {
     private var accessToken: String? = null
-    override suspend fun login(email: String, password: String): AuthResponse = client.post("$baseUrl/api/v1/auth/login") { contentType(ContentType.Application.Json); setBody(LoginRequest(email,password)) }.body<AuthResponse>().also { accessToken=it.accessToken }
+    override suspend fun requestOtp(email: String): OtpRequestResponse = client.post("$baseUrl/api/v1/auth/otp/request") {
+        contentType(ContentType.Application.Json)
+        setBody(OtpRequest(email))
+    }.body()
+    override suspend fun verifyOtp(email: String, code: String): AuthResponse = client.post("$baseUrl/api/v1/auth/otp/verify") {
+        contentType(ContentType.Application.Json)
+        setBody(OtpVerifyRequest(email, code))
+    }.body<AuthResponse>().also { accessToken = it.accessToken }
     override suspend fun events(): List<EventDto> = authorizedGet("/api/v1/events")
     override suspend fun hall(id: String): HallDto = authorizedGet("/api/v1/halls/$id")
     override suspend fun seats(sessionId: String, since: Long?): SeatSnapshotDto = authorizedGet("/api/v1/sessions/$sessionId/seats"+(since?.let{"?since=$it"}?:""))

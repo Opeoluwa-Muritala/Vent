@@ -8,6 +8,7 @@ data class AppConfig(
     val databaseUser: String,
     val databasePassword: String,
     val jwtSecret: String,
+    val demoOtpLogging: Boolean,
     val allowedOrigins: Set<String>,
 ) {
     companion object {
@@ -21,6 +22,7 @@ data class AppConfig(
                 databaseUser = database.second,
                 databasePassword = database.third,
                 jwtSecret = secret,
+                demoOtpLogging = env["VENT_DEMO_OTP_LOGGING"].equals("true", ignoreCase = true),
                 allowedOrigins = env["ALLOWED_ORIGINS"].orEmpty().split(',').map(String::trim).filter(String::isNotEmpty).toSet(),
             )
         }

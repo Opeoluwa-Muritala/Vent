@@ -27,7 +27,6 @@ dependencies {
     implementation(libs.hikari)
     implementation(libs.flyway.core)
     implementation(libs.flyway.postgres)
-    implementation(libs.argon2)
     implementation(libs.logback)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.ktor.server.test.host)

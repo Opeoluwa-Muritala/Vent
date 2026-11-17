@@ -12,7 +12,6 @@ exposed = "1.0.0"
 postgres = "42.7.8"
 hikari = "7.0.2"
 flyway = "11.14.1"
-argon2 = "2.12"
 logback = "1.5.20"
 detekt = "1.23.8"
 ktlintPlugin = "13.1.0"
@@ -55,7 +54,6 @@ postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgres = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
-argon2 = { module = "de.mkammerer:argon2-jvm", version.ref = "argon2" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.ref = "embeddedPostgres" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

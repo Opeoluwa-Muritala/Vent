@@ -7,7 +7,6 @@ import java.util.UUID
 fun main() {
     val config = AppConfig.fromEnvironment()
     val dataSource = DatabaseFactory.connect(config)
-    val hasher = PasswordHasher()
     dataSource.connection.use { connection ->
         connection.autoCommit = false
         try {
@@ -28,8 +27,7 @@ fun main() {
                 Triple("50000000-0000-0000-0000-000000000005","kai@vent.demo","ATTENDEE"),
             )
             users.forEachIndexed { index, (id,email,role) ->
-                val hash=hasher.hash("VentDemo123!".toCharArray())
-                connection.prepareStatement("INSERT INTO users(id,name,email,password_hash) VALUES (?::uuid,?,?,?) ON CONFLICT(id) DO NOTHING").use { it.setString(1,id);it.setString(2,email.substringBefore('@').replaceFirstChar(Char::uppercase));it.setString(3,email);it.setString(4,hash);it.executeUpdate() }
+                connection.prepareStatement("INSERT INTO users(id,name,email) VALUES (?::uuid,?,?) ON CONFLICT(id) DO NOTHING").use { it.setString(1,id);it.setString(2,email.substringBefore('@').replaceFirstChar(Char::uppercase));it.setString(3,email);it.executeUpdate() }
                 connection.prepareStatement("INSERT INTO user_roles(user_id,event_id,role) VALUES (?::uuid,?::uuid,?) ON CONFLICT DO NOTHING").use { it.setString(1,id);it.setString(2,eventId);it.setString(3,role);it.executeUpdate() }
             }
             val seatIds=mutableListOf<String>()
@@ -45,7 +43,7 @@ fun main() {
                 connection.prepareStatement("INSERT INTO session_secrets(session_id,hmac_key,printed_epoch) VALUES (?::uuid,?,1) ON CONFLICT(session_id) DO NOTHING").use { it.setString(1,id);it.setBytes(2,sessionKey);it.executeUpdate() }
             }
             connection.commit()
-            println("Vent demo seed is ready. Demo password: VentDemo123!")
+            println("Vent demo seed is ready. Request a one-time code with VENT_DEMO_OTP_LOGGING=true for local demos.")
         } catch (error: Throwable) { connection.rollback(); throw error } finally { connection.autoCommit=true }
     }
 }

@@ -3,9 +3,10 @@ package app.vent.server
 import app.vent.api.ApiError
 import app.vent.api.HealthResponse
 import app.vent.api.AuthResponse
-import app.vent.api.LoginRequest
+import app.vent.api.OtpRequest
+import app.vent.api.OtpRequestResponse
+import app.vent.api.OtpVerifyRequest
 import app.vent.api.RefreshRequest
-import app.vent.api.RegisterRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -20,6 +21,8 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
+import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
+import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
@@ -42,9 +45,10 @@ fun main() {
 fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
     val dataSource = DatabaseFactory.connect(config)
     val tokenService = TokenService(config.jwtSecret)
-    val authService = AuthService(AuthRepository(dataSource), PasswordHasher(), tokenService)
+    val authService = AuthService(AuthRepository(dataSource), tokenService, DemoEmailSender(config.demoOtpLogging))
     val checkInTokens = CheckInTokenService(dataSource)
     install(CallLogging)
+    install(XForwardedHeaders)
     install(DefaultHeaders) {
         header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
@@ -55,7 +59,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
     }
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false; encodeDefaults = true }) }
     install(StatusPages) {
-        exception<EmailAlreadyExists> { call, _ -> call.respond(HttpStatusCode.Conflict, ApiError("email_exists", "An account already uses that email")) }
+        exception<OtpRateLimited> { call, _ -> call.respond(HttpStatusCode.TooManyRequests, ApiError("rate_limited", "Too many tries. Wait a minute and try again.")) }
         exception<Forbidden> { call, _ -> call.respond(HttpStatusCode.Forbidden, ApiError("forbidden", "You do not have permission for this action")) }
         exception<IllegalArgumentException> { call, error -> call.respond(HttpStatusCode.BadRequest, ApiError(error.message ?: "invalid_request", "The request is invalid")) }
         exception<Throwable> { call, _ -> call.respond(HttpStatusCode.InternalServerError, ApiError("internal_error", "The request could not be completed")) }
@@ -81,16 +85,19 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
         route("/api/v1") {
             get("/health") { call.respond(HealthResponse("ok")) }
             rateLimit(RateLimitName("auth")) {
-                post("/auth/register") {
-                    val request = call.receive<RegisterRequest>()
-                    val pair = authService.register(request.name, request.email, request.password.toCharArray())
-                    call.respond(HttpStatusCode.Created, AuthResponse(pair.accessToken, pair.refreshToken, pair.expiresInSeconds))
+                post("/auth/otp/request") {
+                    val request = call.receive<OtpRequest>()
+                    authService.requestCode(request.email, call.request.origin.remoteHost)
+                    call.respond(HttpStatusCode.Accepted, OtpRequestResponse())
                 }
-                post("/auth/login") {
-                    val request = call.receive<LoginRequest>()
-                    val pair = authService.login(request.email, request.password.toCharArray())
-                        ?: return@post call.respond(HttpStatusCode.Unauthorized, ApiError("invalid_credentials", "Email or password is incorrect"))
-                    call.respond(AuthResponse(pair.accessToken, pair.refreshToken, pair.expiresInSeconds))
+                post("/auth/otp/verify") {
+                    val request = call.receive<OtpVerifyRequest>()
+                    when (val result = authService.verifyCode(request.email, request.code)) {
+                        is OtpVerification.Success -> call.respond(AuthResponse(result.tokens.accessToken, result.tokens.refreshToken, result.tokens.expiresInSeconds))
+                        is OtpVerification.Wrong -> call.respond(HttpStatusCode.Unauthorized, ApiError("wrong_code", "That code isn't right. ${result.triesLeft} tries left."))
+                        OtpVerification.Expired -> call.respond(HttpStatusCode.Unauthorized, ApiError("expired_code", "That code has expired. Send a new one."))
+                        OtpVerification.Locked -> call.respond(HttpStatusCode.TooManyRequests, ApiError("code_locked", "Too many wrong tries. Send a new code."))
+                    }
                 }
                 post("/auth/refresh") {
                     val request = call.receive<RefreshRequest>()

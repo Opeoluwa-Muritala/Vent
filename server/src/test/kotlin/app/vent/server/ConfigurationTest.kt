@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.test.assertNotEquals
 
 class ConfigurationTest {
     @Test fun rejectsShortJwtSecrets() {
@@ -23,5 +24,15 @@ class ConfigurationTest {
         val decoded = service.verifier().verify(token)
         assertEquals("user-id", decoded.subject)
         assertTrue(decoded.expiresAtAsInstant.isAfter(decoded.issuedAtAsInstant))
+        assertEquals(3600, decoded.expiresAtAsInstant.epochSecond - decoded.issuedAtAsInstant.epochSecond)
+    }
+
+    @Test fun otpHashesAreKeyedAndBoundToEmail() {
+        val first = TokenService("01234567890123456789012345678901")
+        val second = TokenService("abcdefghijklmnopqrstuvwxyz123456")
+        val hash = first.hashOtp("ada@company.com", "123456")
+        assertEquals(hash, first.hashOtp("ada@company.com", "123456"))
+        assertNotEquals(hash, first.hashOtp("other@company.com", "123456"))
+        assertNotEquals(hash, second.hashOtp("ada@company.com", "123456"))
     }
 }
