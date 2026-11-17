@@ -1,0 +1,18 @@
+style:
+  ForbiddenComment:
+    active: true
+    comments:
+      - reason: "Use a concrete token or behavior instead of an aesthetic buzzword."
+        value: "(?i)\\b(clean|modern|professional|sleek|premium|beautiful|elegant)\\b"
+  MagicNumber:
+    active: true
+    excludes:
+      - '**/ui/theme/**'
+      - '**/test/**'
+      - '**/androidTest/**'
+    ignoreNumbers: ['-1', '0', '1', '2']
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      - reason: "Blur is not part of the Vent design system."
+        value: "androidx.compose.ui.draw.blur"

@@ -1,0 +1,68 @@
+# Ignore root-level hidden directories by default. GitHub configuration is
+# project-owned and remains versioned.
+.*/
+!.github/
+!.github/**
+
+# Gradle and Kotlin generated state
+.gradle/
+.kotlin/
+**/build/
+kotlin-js-store/
+
+# JavaScript/Wasm dependencies and generated output
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE and editor-local files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+local.properties
+*.local
+
+# Local agent/plugin installations and caches
+.agents/
+.codex/
+.impeccable/
+skill-packages/
+AGENTS.md
+CLAUDE.md
+install-requested-skills.ps1
+
+# Environment files, credentials, and signing material
+.env
+.env.*
+!.env.example
+secrets.properties
+keystore.properties
+google-services.json
+*.jks
+*.keystore
+*.mobileprovision
+*.p12
+*.pem
+*.key
+
+# Build products and diagnostics outside Gradle build directories
+*.apk
+*.aab
+*.ipa
+*.log
+hs_err_pid*
+replay_pid*
+captures/
+coverage/
+
+# Operating-system temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.swp
+*~
