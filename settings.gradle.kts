@@ -8,4 +8,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "vent"
-include(":shared-domain", ":shared-api", ":server", ":composeApp")
+include(":shared-domain", ":shared-api", ":server", ":composeApp", ":androidApp")

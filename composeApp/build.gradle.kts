@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
@@ -13,7 +13,12 @@ plugins {
     alias(libs.plugins.ksp)
 }
 kotlin {
-    androidTarget { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
+    android {
+        namespace = "app.vent.shared"
+        compileSdk = 37
+        minSdk = 34
+        compilerOptions.configure { jvmTarget.set(JvmTarget.JVM_17) }
+    }
     iosArm64(); iosSimulatorArm64()
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
         binaries.framework { baseName = "VentKit"; isStatic = true }
@@ -44,7 +49,6 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
         androidMain.dependencies {
-            implementation("androidx.activity:activity-compose:1.12.0")
             implementation(libs.androidx.room.runtime)
         }
         wasmJsMain.dependencies {
@@ -55,14 +59,6 @@ kotlin {
 dependencies {
     add("kspAndroid", libs.androidx.room.compiler)
 }
-android {
-    namespace = "app.vent"
-    compileSdk = 37
-    defaultConfig { applicationId = "app.vent"; minSdk = 34; targetSdk = 37; versionCode = 1; versionName = "1.0.0-demo" }
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-    buildFeatures { compose = true }
-}
-
 detekt {
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
     buildUponDefaultConfig = true
