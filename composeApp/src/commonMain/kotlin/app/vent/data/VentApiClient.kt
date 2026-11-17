@@ -22,6 +22,7 @@ interface VentApi {
     suspend fun checkIn(sessionId: String, request: CheckInRequest): CheckInResponse
     suspend fun quests(eventId: String): List<QuestDto>
     suspend fun wrapped(eventId: String): WrappedCardDto
+    fun clearSession()
 }
 
 class VentApiClient(private val baseUrl: String, private val client: HttpClient = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false }) } }) : VentApi {
@@ -42,5 +43,5 @@ class VentApiClient(private val baseUrl: String, private val client: HttpClient 
     override suspend fun wrapped(eventId: String): WrappedCardDto = authorizedGet("/api/v1/events/$eventId/wrapped/me")
     private suspend inline fun <reified T> authorizedGet(path: String): T = client.get("$baseUrl$path") { token()?.let(::bearerAuth) }.body()
     private fun token(): String? = accessToken
-    fun clearSession() { accessToken=null }
+    override fun clearSession() { accessToken=null }
 }

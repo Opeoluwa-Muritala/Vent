@@ -1,6 +1,7 @@
 package app.vent
 
 import app.vent.data.rememberVentLocalStore
+import app.vent.data.createVentApi
 import app.vent.ui.theme.VentTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavBackStack
@@ -72,6 +73,12 @@ data class NavItem(val screen: VentScreen, val label: String, val icon: ImageVec
 @Composable
 fun VentApp() {
     VentTheme {
+        val authViewModel = viewModel { AuthViewModel(createVentApi()) }
+        val authState by authViewModel.state.collectAsState()
+        if (authState.step != AuthStep.AUTHENTICATED) {
+            AuthFlow(authState, authViewModel::updateEmail, authViewModel::updateCode, authViewModel::requestCode, authViewModel::verify, authViewModel::changeEmail, authViewModel::chooseEvent)
+            return@VentTheme
+        }
         val localStore = rememberVentLocalStore()
         val ventViewModel = viewModel { VentViewModel(localStore) }
         val uiState by ventViewModel.uiState.collectAsState()
@@ -96,7 +103,7 @@ fun VentApp() {
                     VentRail(items,uiState.screen,{onAction(VentAction.Navigate(it))},uiState.role)
                     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surface) {
                         Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter){
-                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true)}
+                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true,authState.email,authViewModel::signOut)}
                         }
                     }
                 }
@@ -104,13 +111,13 @@ fun VentApp() {
                 Scaffold(
                     containerColor=MaterialTheme.colorScheme.surface,
                     bottomBar={ VentBottomBar(items,uiState.screen){onAction(VentAction.Navigate(it))} },
-                ) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { VentSurface(uiState,onAction,false) } }
+                ) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
             }
         }
     }
 }
 
-@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean){
+@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit){
     val target = uiState.screen.toRoute()
     val backStack = rememberNavBackStack(ventNavigationConfig, target)
     BindBrowserNavigation(backStack)
@@ -138,7 +145,7 @@ fun VentApp() {
             entry<ScheduleRoute> { ScheduleScreen({onAction(VentAction.Navigate(it))},uiState.role) }
             entry<SeatRoute> { SeatSelectionScreen(uiState,onAction) }
             entry<QuestsRoute> { QuestScreen() }
-            entry<ProfileRoute> { ProfileScreen(uiState,onAction) }
+            entry<ProfileRoute> { ProfileScreen(uiState,email,onSignOut) }
             entry<OrganizerRoute> { OrganizerDashboard({onAction(VentAction.Navigate(it))},expanded) }
         },
     )
@@ -380,13 +387,14 @@ private fun SeatLegend() {
 }}
 @Composable private fun Metric(value:String,label:String,modifier:Modifier=Modifier){Surface(modifier,shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer){Column(Modifier.padding(20.dp)){Text(value,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSecondaryContainer);Text(label,color=MaterialTheme.colorScheme.onSecondaryContainer)}}}
 
-@Composable private fun ProfileScreen(uiState:VentUiState,onAction:(VentAction)->Unit){Page("Profile"){
+@Composable private fun ProfileScreen(uiState:VentUiState,email:String,onSignOut:()->Unit){Page("Profile"){
     LazyColumn(contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
         item{Row(verticalAlignment=Alignment.CenterVertically){Surface(Modifier.size(64.dp),shape=CircleShape,color=MaterialTheme.colorScheme.primaryContainer){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("YO",style=MaterialTheme.typography.titleLarge)}};Spacer(Modifier.width(16.dp));Column{Text("Your profile",style=MaterialTheme.typography.titleLarge);Text("55 points · 1 badge",color=MaterialTheme.colorScheme.onSurfaceVariant)}}}
         item{HorizontalDivider()}
-        item{ListItem(headlineContent={Text("Demo role")},supportingContent={Text(if(uiState.role==DemoRole.ATTENDEE)"Attendee experience" else "Organizer experience")},leadingContent={Icon(Icons.Outlined.SwitchAccount,null)},trailingContent={Switch(checked=uiState.role==DemoRole.ORGANIZER,onCheckedChange={onAction(VentAction.SwitchRole(if(it)DemoRole.ORGANIZER else DemoRole.ATTENDEE))})})}
+        item{ListItem(headlineContent={Text(email)},supportingContent={Text("Registered email")},leadingContent={Icon(Icons.Outlined.Email,null)})}
+        item{AssistChip(onClick={},label={Text(if(uiState.role==DemoRole.ATTENDEE)"Attendee" else "Organizer")},leadingIcon={Icon(Icons.Outlined.Badge,null)})}
         item{ListItem(headlineContent={Text("Appearance")},supportingContent={Text("Follows system")},leadingContent={Icon(Icons.Outlined.DarkMode,null)})}
-        item{OutlinedButton(onClick={},modifier=Modifier.fillMaxWidth()){Text("Sign out")}}
+        item{OutlinedButton(onClick=onSignOut,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.outlinedButtonColors(contentColor=MaterialTheme.colorScheme.error)){Text("Sign out")}}
     }
 }}
 
