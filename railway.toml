@@ -1,0 +1,10 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "./gradlew :server:installDist"
+
+[deploy]
+startCommand = "./server/build/install/server/bin/server"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
