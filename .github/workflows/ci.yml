@@ -27,8 +27,8 @@ jobs:
           name: vent-ubuntu-artifacts
           path: |
             **/build/reports/**
-            androidApp/build/outputs/apk/debug/*.apk
-            composeApp/build/dist/wasmJs/productionExecutable/**
+            frontend/androidApp/build/outputs/apk/debug/*.apk
+            frontend/composeApp/build/dist/wasmJs/productionExecutable/**
             server/build/install/server/**
   ios:
     runs-on: macos-latest
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vent-ios-framework
-          path: composeApp/build/bin/iosSimulatorArm64/debugFramework/**
+          path: frontend/composeApp/build/bin/iosSimulatorArm64/debugFramework/**
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [verify, ios]

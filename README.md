@@ -10,7 +10,7 @@ Local commands are available when needed:
 
 ```powershell
 .\gradlew.bat build check
-.\gradlew.bat :server:run
+.\gradlew.bat -p server run
 .\gradlew.bat :androidApp:assembleDebug
 .\gradlew.bat :composeApp:wasmJsBrowserDistribution
 ```
@@ -26,8 +26,8 @@ Copy `.env.example` values into the shell or IDE run configuration. Never commit
 - `shared-domain`: pure Kotlin business models and rules.
 - `shared-api`: serializable API contracts.
 - `server`: Ktor routes, use cases, persistence, authentication, and migrations.
-- `composeApp`: adaptive shared UI and Android/iOS/Wasm platform implementations.
-- `androidApp`: thin Android application entry point and APK packaging module.
+- `frontend/composeApp`: shared UI and Android/iOS/Wasm platform implementations.
+- `frontend/androidApp`: Android entry point and APK packaging. Gradle task paths remain `:composeApp` and `:androidApp`.
 - `infra`: Railway deployment guidance.
 
 ## Local demo persistence

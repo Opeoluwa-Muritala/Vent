@@ -49,12 +49,13 @@ private object DemoState {
     val hall = HallDto(hallId,"Main theatre",12.0,8.0,seats,listOf(HallElementDto("STAGE","Stage",1.0,0.2,10.0,0.8),HallElementDto("EXIT","Exit",0.1,6.5,0.5,1.0)))
 }
 
-fun Route.ventDemoRoutes(access: AccessControl, checkInTokens: CheckInTokenService) {
+internal fun Route.ventDemoRoutes(access: AccessControl, checkInTokens: CheckInTokenService, schedule: ScheduleRepository) {
     fun userId(call: io.ktor.server.application.ApplicationCall) = requireNotNull(call.principal<UserPrincipal>()).userId
-    get("/events") { call.respond(listOf(DemoState.event)) }
+    get("/events") { call.respond(schedule.events(userId(call))) }
     get("/events/{id}") {
-        if (call.parameters["id"] != DemoState.eventId) return@get call.respond(HttpStatusCode.NotFound, ApiError("not_found","Event not found"))
-        call.respond(DemoState.event)
+        val event = schedule.events(userId(call)).firstOrNull { it.id == call.parameters["id"] }
+            ?: return@get call.respond(HttpStatusCode.NotFound, ApiError("not_found", "Event not found"))
+        call.respond(event)
     }
     get("/halls/{id}") {
         if (call.parameters["id"] != DemoState.hallId) return@get call.respond(HttpStatusCode.NotFound, ApiError("not_found","Hall not found"))
@@ -110,18 +111,17 @@ fun Route.ventDemoRoutes(access: AccessControl, checkInTokens: CheckInTokenServi
     get("/events/{id}/wrapped/me") { call.respond(WrappedCardDto(2,3,75,listOf(BadgeDto("b1","Full House","Attend both sessions")),2)) }
     get("/events/{id}/occupancy") { access.require(DemoState.eventId,userId(call),"ORGANIZER"); call.respond(listOf(OccupancyDto(DemoState.sessionId,40,38,31,7))) }
     post("/events") {
-        access.requireAnyOrganizer(userId(call))
-        val request=call.receive<CreateEventRequest>();require(request.title.length in 3..160){"invalid_title"}
-        call.respond(HttpStatusCode.Created,DemoState.event.copy(title=request.title,startsAt=request.startsAt,endsAt=request.endsAt,seedArgb=request.seedArgb))
+        call.respond(HttpStatusCode.Created, schedule.createEvent(userId(call), call.receive<CreateEventRequest>()))
     }
     put("/events/{id}/seed") {
-        access.require(DemoState.eventId,userId(call),"ORGANIZER");val request=call.receive<UpdateSeedRequest>();require(request.seedArgb.matches(Regex("^[0-9A-Fa-f]{8}$"))){"invalid_seed"};call.respond(HttpStatusCode.NoContent)
+        schedule.updateSeed(userId(call), call.parameters["id"].orEmpty(), call.receive<UpdateSeedRequest>().seedArgb)
+        call.respond(HttpStatusCode.NoContent)
     }
     post("/halls/{id}/layout") {
         access.require(DemoState.eventId,userId(call),"ORGANIZER");val request=call.receive<SaveHallLayoutRequest>();require(request.width>0&&request.height>0&&request.seats.size<=500){"invalid_layout"};DemoState.version.incrementAndGet();call.respond(HttpStatusCode.NoContent)
     }
     post("/sessions") {
-        val request=call.receive<CreateSessionRequest>();access.require(request.eventId,userId(call),"ORGANIZER");call.respond(HttpStatusCode.Created,SessionDto(UUID.randomUUID().toString(),request.eventId,request.hallId,request.title,request.startsAt,request.endsAt,request.checkInOpensAt,request.checkInClosesAt))
+        call.respond(HttpStatusCode.Created, schedule.createSession(userId(call), call.receive<CreateSessionRequest>()))
     }
     post("/sessions/{id}/seats/{seatId}/unassign") { access.require(DemoState.eventId,userId(call),"ORGANIZER");DemoState.version.incrementAndGet();call.respond(HttpStatusCode.NoContent) }
     get("/sessions/{id}/checkin-codes/current") { access.require(DemoState.eventId,userId(call),"ORGANIZER");call.respond(CheckInCodeDto(checkInTokens.issueScreen(DemoState.sessionId),"SCREEN",Instant.now().plusSeconds(30).toString())) }

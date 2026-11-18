@@ -119,7 +119,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
                     }
                     call.respond(mapOf("id" to userId, "role" to if (organizer) "ORGANIZER" else "ATTENDEE"))
                 }
-                ventDemoRoutes(AccessControl(dataSource), checkInTokens)
+                ventDemoRoutes(AccessControl(dataSource), checkInTokens, ScheduleRepository(dataSource))
             }
         }
     }

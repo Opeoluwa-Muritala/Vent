@@ -33,11 +33,11 @@ Vent owns its light and dark color schemes. Never derive colors from the device 
 
 | Concern | Source |
 | --- | --- |
-| Color schemes | `composeApp/src/commonMain/kotlin/app/vent/ui/theme/Color.kt` |
-| Typography | `composeApp/src/commonMain/kotlin/app/vent/ui/theme/Type.kt` |
-| Shapes | `composeApp/src/commonMain/kotlin/app/vent/ui/theme/Shape.kt` |
-| Spacing and breakpoints | `composeApp/src/commonMain/kotlin/app/vent/ui/theme/Spacing.kt` |
-| Theme wrapper | `composeApp/src/commonMain/kotlin/app/vent/ui/theme/VentTheme.kt` |
+| Color schemes | `frontend/composeApp/src/commonMain/kotlin/app/vent/ui/theme/Color.kt` |
+| Typography | `frontend/composeApp/src/commonMain/kotlin/app/vent/ui/theme/Type.kt` |
+| Shapes | `frontend/composeApp/src/commonMain/kotlin/app/vent/ui/theme/Shape.kt` |
+| Spacing and breakpoints | `frontend/composeApp/src/commonMain/kotlin/app/vent/ui/theme/Spacing.kt` |
+| Theme wrapper | `frontend/composeApp/src/commonMain/kotlin/app/vent/ui/theme/VentTheme.kt` |
 
 Use filled tonal surfaces for grouped content and ripple press feedback. Use Material Symbols Outlined, with Filled reserved only for selected navigation state. Android touch targets are at least 48 dp.
 

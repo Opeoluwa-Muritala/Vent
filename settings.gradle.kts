@@ -9,3 +9,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "vent"
 include(":shared-domain", ":shared-api", ":server", ":composeApp", ":androidApp")
+project(":composeApp").projectDir = file("frontend/composeApp")
+project(":androidApp").projectDir = file("frontend/androidApp")
