@@ -73,14 +73,3 @@ internal actual fun SessionHeaderImage(image: String?, modifier: Modifier) {
     if (header == null) DefaultSessionHeader(modifier)
     else Image(header, null, modifier, contentScale = ContentScale.Crop)
 }
-*** Add File: composeApp/src/iosMain/kotlin/app/vent/SessionImages.ios.kt
-package app.vent
-
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-
-@Composable
-internal actual fun rememberSessionImagePicker(onRead: (String?) -> Unit): (() -> Unit)? = null
-
-@Composable
-internal actual fun SessionHeaderImage(image: String?, modifier: Modifier) = VenuePhoto(modifier)
