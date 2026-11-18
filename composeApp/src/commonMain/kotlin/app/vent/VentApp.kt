@@ -26,6 +26,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import app.vent.ui.theme.spacing
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,6 +56,18 @@ import kotlinx.serialization.modules.subclass
 @Serializable internal data object QuestsRoute : VentRoute
 @Serializable internal data object ProfileRoute : VentRoute
 @Serializable internal data object OrganizerRoute : VentRoute
+@Serializable internal data object PeopleRoute : VentRoute
+@Serializable internal data object ScannerRoute : VentRoute
+@Serializable internal data object WrappedRoute : VentRoute
+@Serializable internal data object DoorRoute : VentRoute
+@Serializable internal data object OccupancyRoute : VentRoute
+@Serializable internal data object ControlsRoute : VentRoute
+@Serializable internal data object SetupRoute : VentRoute
+@Serializable internal data object ProjectorRoute : VentRoute
+@Serializable internal data object ConfirmedRoute : VentRoute
+@Serializable internal data object DuplicateRoute : VentRoute
+@Serializable internal data object WrongRoute : VentRoute
+@Serializable internal data object ExpiredRoute : VentRoute
 
 private val ventNavigationConfig = SavedStateConfiguration {
     serializersModule = SerializersModule {
@@ -64,6 +78,18 @@ private val ventNavigationConfig = SavedStateConfiguration {
             subclass(QuestsRoute::class, QuestsRoute.serializer())
             subclass(ProfileRoute::class, ProfileRoute.serializer())
             subclass(OrganizerRoute::class, OrganizerRoute.serializer())
+            subclass(PeopleRoute::class, PeopleRoute.serializer())
+            subclass(ScannerRoute::class, ScannerRoute.serializer())
+            subclass(WrappedRoute::class, WrappedRoute.serializer())
+            subclass(DoorRoute::class, DoorRoute.serializer())
+            subclass(OccupancyRoute::class, OccupancyRoute.serializer())
+            subclass(ControlsRoute::class, ControlsRoute.serializer())
+            subclass(SetupRoute::class, SetupRoute.serializer())
+            subclass(ProjectorRoute::class, ProjectorRoute.serializer())
+            subclass(ConfirmedRoute::class, ConfirmedRoute.serializer())
+            subclass(DuplicateRoute::class, DuplicateRoute.serializer())
+            subclass(WrongRoute::class, WrongRoute.serializer())
+            subclass(ExpiredRoute::class, ExpiredRoute.serializer())
         }
     }
 }
@@ -71,31 +97,38 @@ private val ventNavigationConfig = SavedStateConfiguration {
 data class NavItem(val screen: VentScreen, val label: String, val icon: ImageVector)
 
 @Composable
-fun VentApp() {
+fun VentApp(allowLocalOrganizer: Boolean = false) {
     VentTheme {
-        val authViewModel = viewModel { AuthViewModel(createVentApi()) }
+        val localStore = rememberVentLocalStore()
+        val authViewModel = viewModel { AuthViewModel(createVentApi(), localStore, allowLocalOrganizer) }
         val authState by authViewModel.state.collectAsState()
         if (authState.step != AuthStep.AUTHENTICATED) {
-            AuthFlow(authState, authViewModel::updateEmail, authViewModel::updateCode, authViewModel::requestCode, authViewModel::verify, authViewModel::changeEmail, authViewModel::chooseEvent)
+            AuthFlow(authState, authViewModel::updateEmail, authViewModel::updateCode, authViewModel::requestCode, authViewModel::verify, authViewModel::changeEmail, authViewModel::chooseEvent, authViewModel::signInLocally)
             return@VentTheme
         }
-        val localStore = rememberVentLocalStore()
-        val ventViewModel = viewModel { VentViewModel(localStore) }
+        val ventViewModel = viewModel(key = "vent:${authState.organizer}:${authState.email}") {
+            VentViewModel(localStore, attendeeOnly = !authState.organizer, startAsOrganizer = authState.organizer, accountEmail = authState.email)
+        }
         val uiState by ventViewModel.uiState.collectAsState()
         val onAction = ventViewModel::onAction
         val attendeeItems = listOf(
-            NavItem(VentScreen.EVENT,"Event",Icons.Outlined.Home),
-            NavItem(VentScreen.SCHEDULE,"Schedule",Icons.Outlined.CalendarMonth),
-            NavItem(VentScreen.QUESTS,"Quests",Icons.Outlined.MilitaryTech),
-            NavItem(VentScreen.PROFILE,"Profile",Icons.Outlined.Person),
+            NavItem(VentScreen.SCHEDULE,"Sessions",Icons.Outlined.CalendarMonth),
+            NavItem(VentScreen.SEAT,"Seat Map",Icons.Outlined.Chair),
+            NavItem(VentScreen.QUESTS,"Quests",Icons.Outlined.EmojiEvents),
+            NavItem(VentScreen.PROFILE,"Summit Pass",Icons.Outlined.Badge),
         )
         val organizerItems = listOf(
-            NavItem(VentScreen.ORGANIZER,"Overview",Icons.Outlined.Dashboard),
-            NavItem(VentScreen.SCHEDULE,"Sessions",Icons.Outlined.CalendarMonth),
-            NavItem(VentScreen.SEAT,"Seating",Icons.Outlined.Chair),
-            NavItem(VentScreen.PROFILE,"Profile",Icons.Outlined.Person),
+            NavItem(VentScreen.ORGANIZER,"Events",Icons.Outlined.Event),
+            NavItem(VentScreen.SCHEDULE,"Sessions",Icons.Outlined.ViewTimeline),
+            NavItem(VentScreen.PEOPLE,"People",Icons.Outlined.Group),
+            NavItem(VentScreen.QUESTS,"Quests",Icons.Outlined.EmojiEvents),
+            NavItem(VentScreen.PROFILE,"Settings",Icons.Outlined.Settings),
         )
         val items = if (uiState.role == DemoRole.ATTENDEE) attendeeItems else organizerItems
+        val scheme = if (!isSystemInDarkTheme() && uiState.screen !in setOf(VentScreen.EVENT, VentScreen.PEOPLE)) {
+            app.vent.ui.theme.SummitLightColors
+        } else MaterialTheme.colorScheme
+        MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 720.dp
             if (expanded) {
@@ -110,11 +143,19 @@ fun VentApp() {
             } else {
                 Scaffold(
                     containerColor=MaterialTheme.colorScheme.surface,
-                    bottomBar={ VentBottomBar(items,uiState.screen){onAction(VentAction.Navigate(it))} },
-                ) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
+                    bottomBar = {
+                        if (uiState.role == DemoRole.ATTENDEE && uiState.screen != VentScreen.SCANNER) {
+                            CheckInBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
+                        } else if (uiState.screen != VentScreen.SCANNER) {
+                            VentBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
+                        }
+                    },
+                ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
             }
         }
     }
+}
+
 }
 
 @Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit){
@@ -142,11 +183,23 @@ fun VentApp() {
         },
         entryProvider = entryProvider {
             entry<EventRoute> { EventHome(uiState,onAction,expanded) }
-            entry<ScheduleRoute> { ScheduleScreen({onAction(VentAction.Navigate(it))},uiState.role) }
+            entry<ScheduleRoute> { SessionsHome(uiState, onAction) }
             entry<SeatRoute> { SeatSelectionScreen(uiState,onAction) }
-            entry<QuestsRoute> { QuestScreen() }
-            entry<ProfileRoute> { ProfileScreen(uiState,email,onSignOut) }
-            entry<OrganizerRoute> { OrganizerDashboard({onAction(VentAction.Navigate(it))},expanded) }
+            entry<QuestsRoute> { SummitScreen(VentScreen.QUESTS, uiState, onAction, email) }
+            entry<ProfileRoute> { SummitScreen(VentScreen.PROFILE, uiState, onAction, email, onSignOut) }
+            entry<OrganizerRoute> { OrganizerDashboard({onAction(VentAction.Navigate(it))},expanded, onAction) }
+            entry<PeopleRoute> { AttendeeImportScreen(uiState.attendees, onAction) }
+            entry<ScannerRoute> { ScanEntry(uiState, onAction) }
+            entry<WrappedRoute> { SummitScreen(VentScreen.WRAPPED, uiState, onAction) }
+            entry<DoorRoute> { SummitScreen(VentScreen.DOOR, uiState, onAction) }
+            entry<OccupancyRoute> { SummitScreen(VentScreen.OCCUPANCY, uiState, onAction) }
+            entry<ControlsRoute> { SummitScreen(VentScreen.CONTROLS, uiState, onAction) }
+            entry<SetupRoute> { SummitScreen(VentScreen.SETUP, uiState, onAction) }
+            entry<ProjectorRoute> { SummitScreen(VentScreen.PROJECTOR, uiState, onAction) }
+            entry<ConfirmedRoute> { SummitScreen(VentScreen.CONFIRMED, uiState, onAction) }
+            entry<DuplicateRoute> { SummitScreen(VentScreen.DUPLICATE, uiState, onAction) }
+            entry<WrongRoute> { SummitScreen(VentScreen.WRONG, uiState, onAction) }
+            entry<ExpiredRoute> { SummitScreen(VentScreen.EXPIRED, uiState, onAction) }
         },
     )
 }
@@ -158,6 +211,18 @@ private fun VentScreen.toRoute(): VentRoute = when (this) {
     VentScreen.QUESTS -> QuestsRoute
     VentScreen.PROFILE -> ProfileRoute
     VentScreen.ORGANIZER -> OrganizerRoute
+    VentScreen.PEOPLE -> PeopleRoute
+    VentScreen.SCANNER -> ScannerRoute
+    VentScreen.WRAPPED -> WrappedRoute
+    VentScreen.DOOR -> DoorRoute
+    VentScreen.OCCUPANCY -> OccupancyRoute
+    VentScreen.CONTROLS -> ControlsRoute
+    VentScreen.SETUP -> SetupRoute
+    VentScreen.PROJECTOR -> ProjectorRoute
+    VentScreen.CONFIRMED -> ConfirmedRoute
+    VentScreen.DUPLICATE -> DuplicateRoute
+    VentScreen.WRONG -> WrongRoute
+    VentScreen.EXPIRED -> ExpiredRoute
 }
 
 internal fun NavKey.toScreen(): VentScreen = when (this) {
@@ -167,238 +232,112 @@ internal fun NavKey.toScreen(): VentScreen = when (this) {
     QuestsRoute -> VentScreen.QUESTS
     ProfileRoute -> VentScreen.PROFILE
     OrganizerRoute -> VentScreen.ORGANIZER
+    PeopleRoute -> VentScreen.PEOPLE
+    ScannerRoute -> VentScreen.SCANNER
+    WrappedRoute -> VentScreen.WRAPPED
+    DoorRoute -> VentScreen.DOOR
+    OccupancyRoute -> VentScreen.OCCUPANCY
+    ControlsRoute -> VentScreen.CONTROLS
+    SetupRoute -> VentScreen.SETUP
+    ProjectorRoute -> VentScreen.PROJECTOR
+    ConfirmedRoute -> VentScreen.CONFIRMED
+    DuplicateRoute -> VentScreen.DUPLICATE
+    WrongRoute -> VentScreen.WRONG
+    ExpiredRoute -> VentScreen.EXPIRED
     else -> error("Unknown Vent navigation route: $this")
 }
 
 @Composable internal fun Page(title:String,modifier:Modifier=Modifier,actions:@Composable RowScope.()->Unit={},content:@Composable ColumnScope.()->Unit){
     Surface(modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surface){
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal))){
-            Row(Modifier.fillMaxWidth().heightIn(min=80.dp).padding(horizontal=24.dp),verticalAlignment=Alignment.CenterVertically){
-                Text(title,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));actions()
-            }
+        Column(Modifier.fillMaxSize().conferencePattern().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal))){
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = actions)
             Column(Modifier.fillMaxSize(),content=content)
         }
     }
 }
 
-@Composable private fun EventHome(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean){
-    Page("Vent Demo Day",actions={IconButton(onClick={}){Icon(Icons.Outlined.Notifications,"Notifications")}}){
-        LazyColumn(contentPadding=PaddingValues(horizontal=24.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
-            item { Text("Thursday, 20 November · Main theatre",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant) }
-            uiState.message?.let { item { StatusBanner(it){onAction(VentAction.ClearMessage)} } }
-            item { LiveSession(uiState,onAction,expanded) }
-            item { SectionTitle("Your day","2 sessions") }
-            item { SessionRow("09:30","Opening keynote","Main theatre · Seat ${uiState.confirmedSeat}",true){onAction(VentAction.Navigate(VentScreen.SEAT))} }
-            item { SessionRow("13:00","Build lab","Studio hall · Seat C7",false){onAction(VentAction.Navigate(VentScreen.SEAT))} }
-            item { SectionTitle("Momentum","55 points") }
-            item { QuestProgressRow("Opinion leader","2 of 3 polls",2f/3f,Icons.Outlined.RecordVoiceOver) }
-            item { Spacer(Modifier.height(16.dp)) }
-        }
-    }
-}
-
-@Composable private fun LiveSession(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean){
-    Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.primaryContainer){
-        if(expanded) Row(Modifier.fillMaxWidth().padding(24.dp),horizontalArrangement=Arrangement.spacedBy(28.dp),verticalAlignment=Alignment.CenterVertically){LiveCopy(uiState,onAction,Modifier.weight(1f));MiniVenue(Modifier.width(300.dp).height(180.dp))}
-        else Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){LiveCopy(uiState,onAction);MiniVenue(Modifier.fillMaxWidth().height(150.dp))}
-    }
-}
-@Composable private fun LiveCopy(uiState:VentUiState,onAction:(VentAction)->Unit,modifier:Modifier=Modifier){Column(modifier,verticalArrangement=Arrangement.spacedBy(8.dp)){
-    Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(8.dp).clip(CircleShape).background(if(uiState.isCheckedIn)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary));Spacer(Modifier.width(8.dp));Text(if(uiState.isCheckedIn)"You are checked in" else "Check-in is open",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onPrimaryContainer)}
-    Text("Opening keynote",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-    Text("Your seat is ${uiState.confirmedSeat}. Doors close at 10:00.",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onPrimaryContainer)
-    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){Button(onClick={onAction(VentAction.CheckIn)},enabled=!uiState.isCheckedIn){Icon(if(uiState.isCheckedIn)Icons.Outlined.CheckCircle else Icons.Outlined.QrCodeScanner,null);Spacer(Modifier.width(8.dp));Text(if(uiState.isCheckedIn)"Checked in" else "Check in")};OutlinedButton(onClick={onAction(VentAction.Navigate(VentScreen.SEAT))}){Text("Find ${uiState.confirmedSeat}")}}
-}}
-
-@Composable private fun MiniVenue(modifier:Modifier){
-    val primary=MaterialTheme.colorScheme.primary;val outline=MaterialTheme.colorScheme.outline;val surface=MaterialTheme.colorScheme.surface
-    Canvas(modifier.semantics{contentDescription="Preview of the curved theatre showing your seat B4"}){
-        drawRoundRect(surface,cornerRadius=androidx.compose.ui.geometry.CornerRadius(18f));drawRoundRect(primary.copy(alpha=.16f),topLeft=Offset(size.width*.16f,size.height*.08f),size=Size(size.width*.68f,size.height*.18f),cornerRadius=androidx.compose.ui.geometry.CornerRadius(12f))
-        for(row in 0..3)for(col in 0..7){val angle=(-.44f+col*.125f);val radius=size.width*(.26f+row*.065f);val center=Offset(size.width/2+sin(angle)*radius,size.height*.16f+cos(angle)*radius*.62f);drawCircle(if(row==1&&col==3)primary else outline.copy(alpha=.5f),if(row==1&&col==3)8f else 5.5f,center)}
-    }
-}
-
-@Composable private fun ScheduleScreen(navigate:(VentScreen)->Unit,role:DemoRole){Page(if(role==DemoRole.ORGANIZER)"Sessions" else "Schedule"){
-    LazyColumn(contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{AssistChip(onClick={},label={Text("Thursday · 20 Nov")},leadingIcon={Icon(Icons.Outlined.Today,null)})}
-        item{SessionRow("09:30","Opening keynote","Main theatre · 60 min",true){navigate(VentScreen.SEAT)}}
-        item{SessionRow("13:00","Build lab","Studio hall · 90 min",false){navigate(VentScreen.SEAT)}}
-    }
-}}
-
-@Composable private fun SessionRow(time:String,title:String,detail:String,live:Boolean,onClick:()->Unit){
-    Surface(shape=RoundedCornerShape(16.dp),color=if(live)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow){
-        Row(Modifier.fillMaxWidth().clickable(onClick=onClick).padding(horizontal=18.dp,vertical=18.dp),verticalAlignment=Alignment.CenterVertically){
-            Text(time,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.width(72.dp));Column(Modifier.weight(1f)){Text(title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold);Text(detail,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)};if(live)Icon(Icons.Outlined.RadioButtonChecked,"Live",tint=MaterialTheme.colorScheme.primary)else Icon(Icons.Outlined.ChevronRight,"Open")
-        }
-    }
-}
+@Composable private fun EventHome(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean){ EventDetailScreen(uiState, onAction, expanded) }
 
 @Composable
-private fun SeatMapScreen(uiState:VentUiState,onAction:(VentAction)->Unit) {
-    Page(if(uiState.role==DemoRole.ORGANIZER)"Seating" else "Choose your seat"){
-        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal=20.dp,vertical=8.dp)){
-            val twoPane=maxWidth>=720.dp
-            if(twoPane){
-                Row(Modifier.fillMaxSize(),horizontalArrangement=Arrangement.spacedBy(20.dp)){
-                    Column(Modifier.weight(1f).fillMaxHeight(),verticalArrangement=Arrangement.spacedBy(12.dp)){
-                        SeatMapHeader(uiState){onAction(VentAction.LocateConfirmedSeat)}
-                        VenueCanvas(Modifier.fillMaxWidth().weight(1f),uiState.selectedSeat,uiState.role==DemoRole.ATTENDEE){onAction(VentAction.SelectSeat(it))}
-                    }
-                    SeatSelectionPanel(uiState,onAction,Modifier.widthIn(min=288.dp,max=360.dp).fillMaxHeight())
-                }
-            }else{
-                Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(12.dp)){
-                    SeatMapHeader(uiState){onAction(VentAction.LocateConfirmedSeat)}
-                    VenueCanvas(Modifier.fillMaxWidth().weight(1f),uiState.selectedSeat,uiState.role==DemoRole.ATTENDEE){onAction(VentAction.SelectSeat(it))}
-                    SeatSelectionPanel(uiState,onAction,Modifier.fillMaxWidth())
-                }
-            }
-        }
-    }
-}
-
-@Composable private fun SeatMapHeader(uiState:VentUiState,onLocate:()->Unit){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Main theatre",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold);Text(if(uiState.role==DemoRole.ORGANIZER)"38 assigned · 31 checked in" else "Current seat ${uiState.confirmedSeat}",color=MaterialTheme.colorScheme.onSurfaceVariant)};FilledTonalButton(onClick=onLocate){Icon(Icons.Outlined.MyLocation,null);Spacer(Modifier.width(8.dp));Text(if(uiState.role==DemoRole.ORGANIZER)"Fit" else "Find ${uiState.confirmedSeat}")}}}
-
-@Composable private fun SeatSelectionPanel(uiState:VentUiState,onAction:(VentAction)->Unit,modifier:Modifier=Modifier){Surface(modifier,shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceContainerLow){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){Text(if(uiState.role==DemoRole.ORGANIZER)"Seat states" else "Selected ${uiState.selectedSeat}",style=MaterialTheme.typography.titleLarge);SeatLegend();if(uiState.role==DemoRole.ATTENDEE){Text(if(uiState.selectedSeat==uiState.confirmedSeat)"Tap an outlined seat to choose a new place." else "${uiState.selectedSeat} is available. Confirm to change from ${uiState.confirmedSeat}.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);if(uiState.selectedSeat==uiState.confirmedSeat){OutlinedButton(onClick={},enabled=false,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Seat ${uiState.confirmedSeat} selected")}}else{Button(onClick={onAction(VentAction.ConfirmSeat)},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Confirm seat ${uiState.selectedSeat}")}};uiState.message?.let{Text(it,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)}}else{Text("Select a seat on the map to inspect assignment and check-in status.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)}}}}
-
-@Composable
-private fun VenueCanvas(
-    modifier: Modifier,
-    selectedSeat: String,
-    selectionEnabled: Boolean,
-    onSeatSelected: (String) -> Unit,
-) {
-    val primary = MaterialTheme.colorScheme.primary
-    val tertiary = MaterialTheme.colorScheme.tertiary
-    val outline = MaterialTheme.colorScheme.outline
-    val surface = MaterialTheme.colorScheme.surfaceContainerLow
-    val availableSeat = MaterialTheme.colorScheme.surface
-    val selectedSeatMark = MaterialTheme.colorScheme.onPrimary
-    val blocked = MaterialTheme.colorScheme.error
-
-    Surface(modifier, shape = RoundedCornerShape(16.dp), color = surface) {
-        Canvas(
-            Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .pointerInput(selectedSeat, selectionEnabled) {
-                    if (!selectionEnabled) return@pointerInput
-                    detectTapGestures { tap ->
-                        var closestSeat: String? = null
-                        var closestDistance = 24.dp.toPx()
-                        for (row in 0..4) for (column in 0..7) {
-                            val occupied = row == 0 && column < 3
-                            val blockedSeat = row == 2 && column == 7
-                            if (!occupied && !blockedSeat) {
-                                val angle = -.48f + column * .137f
-                                val radius = size.width * (.3f + row * .085f)
-                                val center = Offset(
-                                    size.width / 2f + sin(angle) * radius,
-                                    size.height * .04f + cos(angle) * radius * .72f,
-                                )
-                                val distance = (tap - center).getDistance()
-                                if (distance <= closestDistance) {
-                                    closestDistance = distance
-                                    closestSeat = "${('A'.code + row).toChar()}${column + 1}"
-                                }
-                            }
-                        }
-                        closestSeat?.let(onSeatSelected)
-                    }
-                }
-                .semantics {
-                    contentDescription = "Interactive theatre map. Selected seat is $selectedSeat. Outlined seats are available."
+private fun CheckInBottomBar(items: List<NavItem>, selected: VentScreen, navigate: (VentScreen) -> Unit) {
+    val space = MaterialTheme.spacing
+    val barColor = MaterialTheme.colorScheme.surfaceContainer
+    val cutoutColor = MaterialTheme.colorScheme.surface
+    Box(Modifier.fillMaxWidth().navigationBarsPadding(), contentAlignment = Alignment.TopCenter) {
+        Row(
+            Modifier.padding(top = space.md).fillMaxWidth().height(space.heroIcon)
+                .drawBehind {
+                    drawRect(barColor)
+                    drawCircle(cutoutColor, radius = (space.touch / 2 + space.xs).toPx(),
+                        center = Offset(size.width / 2, (space.touch / 2 - space.md).toPx()))
                 },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            drawRoundRect(
-                primary.copy(alpha = .12f),
-                topLeft = Offset(size.width * .18f, size.height * .04f),
-                size = Size(size.width * .64f, size.height * .1f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f),
-            )
-            drawLine(
-                outline,
-                Offset(size.width * .18f, size.height * .17f),
-                Offset(size.width * .82f, size.height * .17f),
-                2f,
-                StrokeCap.Round,
-            )
-            for (row in 0..4) for (column in 0..7) {
-                val angle = -.48f + column * .137f
-                val radius = size.width * (.3f + row * .085f)
-                val center = Offset(
-                    size.width / 2 + sin(angle) * radius,
-                    size.height * .04f + cos(angle) * radius * .72f,
+            items.forEachIndexed { index, item ->
+                if (index == items.size / 2) Spacer(Modifier.width(space.action + space.sm))
+                NavigationBarItem(
+                    selected = selected == item.screen,
+                    onClick = { navigate(item.screen) },
+                    icon = { Icon(item.icon, null) },
+                    label = { Text(item.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 )
-                val label = "${('A'.code + row).toChar()}${column + 1}"
-                val selected = label == selectedSeat
-                val occupied = row == 0 && column < 3
-                val blockedSeat = row == 2 && column == 7
-                val fill = when {
-                    selected -> primary
-                    occupied -> tertiary
-                    else -> availableSeat
-                }
-                drawCircle(if (blockedSeat) Color.Transparent else fill, 13f, center)
-                drawCircle(
-                    if (blockedSeat) blocked else if (selected) primary else outline,
-                    13f,
-                    center,
-                    style = Stroke(if (blockedSeat) 3f else 2f),
-                )
-                if (selected) drawCircle(selectedSeatMark, 4f, center)
             }
+        }
+        SmallFloatingActionButton(
+            onClick = { navigate(VentScreen.SCANNER) },
+            modifier = Modifier.size(space.touch),
+            shape = androidx.compose.foundation.shape.CircleShape,
+        ) {
+            Icon(Icons.Outlined.QrCodeScanner, "Scan to check in")
         }
     }
 }
 
 @Composable
-private fun SeatLegend() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        LegendDot(MaterialTheme.colorScheme.primary, "Selected")
-        LegendDot(MaterialTheme.colorScheme.surface, "Available", true)
-        LegendDot(MaterialTheme.colorScheme.tertiary, "Occupied")
+internal fun Modifier.conferencePattern(): Modifier {
+    val accent = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+    val spacing = MaterialTheme.spacing.xxl
+    return drawBehind {
+        val interval = spacing.toPx()
+        var x = interval
+        while (x < size.width + size.height) {
+            drawLine(accent, Offset(x, 0f), Offset(x - size.height, size.height))
+            x += interval
+        }
     }
 }
-@Composable private fun LegendDot(color:Color,label:String,outlined:Boolean=false){Row(verticalAlignment=Alignment.CenterVertically){Surface(Modifier.size(12.dp),shape=CircleShape,color=color,border=if(outlined)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outline)else null){};Spacer(Modifier.width(6.dp));Text(label,style=MaterialTheme.typography.labelMedium)}}
 
-@Composable private fun QuestScreen(){Page("Quests"){
-    LazyColumn(contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
-        item{Text("Complete event moments to unlock badges and move up the leaderboard.",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-        item{QuestProgressRow("Full House","1 of 2 sessions",.5f,Icons.Outlined.EventAvailable)}
-        item{QuestProgressRow("Opinion leader","2 of 3 polls",2f/3f,Icons.Outlined.RecordVoiceOver)}
-        item{QuestProgressRow("Early Bird","Completed",1f,Icons.Outlined.WbTwilight)}
-        item{SectionTitle("Leaderboard","You are #2")}
-        items(listOf("1" to "Amina · 75 pts","2" to "You · 55 pts","3" to "Kai · 40 pts")){(rank,name)->Row(Modifier.fillMaxWidth().padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){Text(rank,style=MaterialTheme.typography.titleLarge,modifier=Modifier.width(44.dp));Text(name,style=MaterialTheme.typography.titleMedium)}}
-    }
-}}
-@Composable private fun QuestProgressRow(title:String,detail:String,progress:Float,icon:ImageVector){Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceContainerLow){Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){Surface(Modifier.size(48.dp),shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.secondaryContainer){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Icon(icon,null,tint=MaterialTheme.colorScheme.onSecondaryContainer)}};Spacer(Modifier.width(14.dp));Column(Modifier.weight(1f)){Text(title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold);Text(detail,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.height(8.dp));LinearProgressIndicator({progress},Modifier.fillMaxWidth())}}}}
-
-@Composable private fun OrganizerDashboard(navigate:(VentScreen)->Unit,expanded:Boolean){Page("Event overview",actions={FilledTonalButton(onClick={}){Icon(Icons.Outlined.Add,null);Spacer(Modifier.width(6.dp));Text("New session")}}){
+@Composable private fun OrganizerDashboard(navigate:(VentScreen)->Unit,expanded:Boolean, dispatch: (VentAction) -> Unit){
+    var showAdd by remember { mutableStateOf(false) }
+    var createQuest by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+    Page("Event overview"){
     LazyColumn(contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
         item{Text("Vent Demo Day",style=MaterialTheme.typography.titleLarge);Text("Live operations · Thursday, 20 November",color=MaterialTheme.colorScheme.onSurfaceVariant)}
         item{if(expanded)Row(horizontalArrangement=Arrangement.spacedBy(16.dp)){Metric("38","Assigned",Modifier.weight(1f));Metric("31","Checked in",Modifier.weight(1f));Metric("7","Not arrived",Modifier.weight(1f))}else Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Metric("31 / 40","Checked in");LinearProgressIndicator({31f/40f},Modifier.fillMaxWidth())}}
         item{SectionTitle("Live session","Opening keynote")}
         item{ListItem(headlineContent={Text("Main theatre")},supportingContent={Text("Check-in open · poll ready")},leadingContent={Icon(Icons.Outlined.MeetingRoom,null)},trailingContent={IconButton(onClick={navigate(VentScreen.SEAT)}){Icon(Icons.Outlined.ChevronRight,"Open seating")}})}
         item{SectionTitle("Attention","2 items")}
+        item { Button({ navigate(VentScreen.DOOR) }) { Text("Open staff console") } }
         item{ListItem(headlineContent={Text("7 attendees not checked in")},supportingContent={Text("Doors close in 18 minutes")},leadingContent={Icon(Icons.Outlined.Schedule,null)})}
     }
-}}
+    }
+    Box(Modifier.align(Alignment.BottomEnd).padding(MaterialTheme.spacing.lg)) {
+        FloatingActionButton({ showAdd = true }) { Icon(Icons.Outlined.Add, "Open organizer actions") }
+        DropdownMenu(showAdd, { showAdd = false }) {
+            DropdownMenuItem(text = { Text("Create quest") }, onClick = { showAdd = false; createQuest = true })
+            DropdownMenuItem(text = { Text("Edit sessions") }, onClick = { showAdd = false; navigate(VentScreen.SCHEDULE) })
+            DropdownMenuItem(text = { Text("Add attendees") }, onClick = { showAdd = false; navigate(VentScreen.PEOPLE) })
+        }
+    }
+    }
+    if (createQuest) CreateQuestDialog({ createQuest = false }) {
+        dispatch(VentAction.PublishQuest(it))
+        createQuest = false
+    }
+}
 @Composable private fun Metric(value:String,label:String,modifier:Modifier=Modifier){Surface(modifier,shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer){Column(Modifier.padding(20.dp)){Text(value,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSecondaryContainer);Text(label,color=MaterialTheme.colorScheme.onSecondaryContainer)}}}
 
-@Composable private fun ProfileScreen(uiState:VentUiState,email:String,onSignOut:()->Unit){Page("Profile"){
-    LazyColumn(contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
-        item{Row(verticalAlignment=Alignment.CenterVertically){Surface(Modifier.size(64.dp),shape=CircleShape,color=MaterialTheme.colorScheme.primaryContainer){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("YO",style=MaterialTheme.typography.titleLarge)}};Spacer(Modifier.width(16.dp));Column{Text("Your profile",style=MaterialTheme.typography.titleLarge);Text("55 points · 1 badge",color=MaterialTheme.colorScheme.onSurfaceVariant)}}}
-        item{HorizontalDivider()}
-        item{ListItem(headlineContent={Text(email)},supportingContent={Text("Registered email")},leadingContent={Icon(Icons.Outlined.Email,null)})}
-        item{AssistChip(onClick={},label={Text(if(uiState.role==DemoRole.ATTENDEE)"Attendee" else "Organizer")},leadingIcon={Icon(Icons.Outlined.Badge,null)})}
-        item{ListItem(headlineContent={Text("Appearance")},supportingContent={Text("Follows system")},leadingContent={Icon(Icons.Outlined.DarkMode,null)})}
-        item{OutlinedButton(onClick=onSignOut,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.outlinedButtonColors(contentColor=MaterialTheme.colorScheme.error)){Text("Sign out")}}
-    }
-}}
-
-@Composable private fun StatusBanner(message:String,onDismiss:()->Unit){Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.tertiaryContainer){Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Outlined.CheckCircle,null,tint=MaterialTheme.colorScheme.onTertiaryContainer);Spacer(Modifier.width(12.dp));Text(message,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onTertiaryContainer,modifier=Modifier.weight(1f));IconButton(onClick=onDismiss){Icon(Icons.Outlined.Close,"Dismiss message",tint=MaterialTheme.colorScheme.onTertiaryContainer)}}}}
 @Composable private fun SectionTitle(title:String,trailing:String){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(title,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f));Text(trailing,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)}}
 @Composable private fun VentBottomBar(items:List<NavItem>,selected:VentScreen,onSelect:(VentScreen)->Unit){NavigationBar(containerColor=MaterialTheme.colorScheme.surfaceContainer){items.forEach{item->NavigationBarItem(selected=selected==item.screen,onClick={onSelect(item.screen)},icon={Icon(item.icon,item.label)},label={Text(item.label,maxLines=1,overflow=TextOverflow.Ellipsis)},colors=NavigationBarItemDefaults.colors(indicatorColor=MaterialTheme.colorScheme.primaryContainer))}}}
 @Composable private fun VentRail(items:List<NavItem>,selected:VentScreen,onSelect:(VentScreen)->Unit,role:DemoRole){NavigationRail(header={Column(horizontalAlignment=Alignment.CenterHorizontally){Spacer(Modifier.height(18.dp));Surface(Modifier.size(44.dp),shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.primary){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("V",color=MaterialTheme.colorScheme.onPrimary,fontWeight=FontWeight.Bold,fontSize=22.sp)}};Spacer(Modifier.height(22.dp))}}){items.forEach{item->NavigationRailItem(selected=selected==item.screen,onClick={onSelect(item.screen)},icon={Icon(item.icon,item.label)},label={Text(item.label)})};Spacer(Modifier.weight(1f));Text(if(role==DemoRole.ORGANIZER)"Organizer" else "Attendee",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.height(18.dp))}}

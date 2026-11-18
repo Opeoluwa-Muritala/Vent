@@ -15,9 +15,12 @@ plugins {
 kotlin {
     android {
         namespace = "app.vent.shared"
+        androidResources.enable = true
         compileSdk = 37
         minSdk = 34
-        compilerOptions.configure { jvmTarget.set(JvmTarget.JVM_17) }
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
     iosArm64(); iosSimulatorArm64()
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
@@ -50,6 +53,12 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
         androidMain.dependencies {
+            implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.androidx.camera.camera2)
+            implementation(libs.androidx.camera.view)
+            implementation(libs.androidx.camera.mlkit.vision)
+            implementation(libs.mlkit.barcode.scanning)
+            implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.room.runtime)
         }
         wasmJsMain.dependencies {

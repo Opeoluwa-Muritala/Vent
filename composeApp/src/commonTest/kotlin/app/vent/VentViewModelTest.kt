@@ -41,14 +41,58 @@ class VentViewModelTest {
         assertEquals("D5", store.saved.confirmedSeat)
     }
 
+    @Test fun seatingAndCheckInAreIsolatedBySessionAfterRestart() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.OpenSession(SummitSession.SECURITY))
+        assertEquals("", model.uiState.value.confirmedSeat)
+        model.onAction(VentAction.SelectSeat("D5"))
+        model.onAction(VentAction.ConfirmSeat)
+        model.onAction(VentAction.CheckIn)
+        model.onAction(VentAction.OpenSession(SummitSession.PIPELINES))
+        assertFalse(model.uiState.value.isCheckedIn)
+        model.onAction(VentAction.SelectSeat("E1"))
+        model.onAction(VentAction.ConfirmSeat)
+        dispatcher.scheduler.advanceUntilIdle()
+        val reopened = VentViewModel(store)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(SummitSession.PIPELINES, reopened.uiState.value.session)
+        assertEquals("E1", reopened.uiState.value.confirmedSeat)
+        reopened.onAction(VentAction.OpenSession(SummitSession.SECURITY))
+        assertEquals(VentScreen.EVENT, reopened.uiState.value.screen)
+        assertEquals("D5", reopened.uiState.value.confirmedSeat)
+        assertTrue(reopened.uiState.value.isCheckedIn)
+    }
+
+    @Test fun staffChangesSurviveReturningToAttendeeHome() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.SwitchRole(DemoRole.ORGANIZER))
+        model.onAction(VentAction.RenameEvent("Engineering summit"))
+        model.onAction(VentAction.SelectGate("East Door 1"))
+        model.onAction(VentAction.SwitchRole(DemoRole.ATTENDEE))
+        dispatcher.scheduler.advanceUntilIdle()
+        val reopened = VentViewModel(store)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(VentScreen.SCHEDULE, reopened.uiState.value.screen)
+        assertEquals("Engineering summit", reopened.uiState.value.eventTitle)
+        assertEquals("East Door 1", reopened.uiState.value.activeGate)
+    }
+
     @Test fun roleControlsAvailableDestinations() = runTest {
         val viewModel = VentViewModel(FakeLocalStore())
         dispatcher.scheduler.advanceUntilIdle()
+        for (destination in staffScreens.keys) {
+            viewModel.onAction(VentAction.Navigate(destination))
+            assertEquals(VentScreen.SCHEDULE, viewModel.uiState.value.screen)
+        }
         viewModel.onAction(VentAction.Navigate(VentScreen.ORGANIZER))
-        assertEquals(VentScreen.EVENT, viewModel.uiState.value.screen)
+        assertEquals(VentScreen.SCHEDULE, viewModel.uiState.value.screen)
         viewModel.onAction(VentAction.SwitchRole(DemoRole.ORGANIZER))
         viewModel.onAction(VentAction.Navigate(VentScreen.QUESTS))
-        assertEquals(VentScreen.ORGANIZER, viewModel.uiState.value.screen)
+        assertEquals(VentScreen.QUESTS, viewModel.uiState.value.screen)
     }
 
     @Test fun checkInIsIdempotentAndPersisted() = runTest {

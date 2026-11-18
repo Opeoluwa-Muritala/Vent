@@ -31,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -59,7 +60,12 @@ import kotlin.math.abs
 
 @Composable
 internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) -> Unit) {
-    Page(if (uiState.role == DemoRole.ORGANIZER) "Seating" else "Choose your seat") {
+    Page(if (uiState.role == DemoRole.ORGANIZER) "Seating" else "Seat navigator") {
+        if (uiState.role == DemoRole.ATTENDEE) {
+            ListItem(headlineContent = { Text(uiState.session.title) },
+                supportingContent = { Text(uiState.session.room + " · " + uiState.confirmedSeat.ifBlank { "Select a seat" }) },
+                trailingContent = { TextButton({ onAction(VentAction.Navigate(VentScreen.SCANNER)) }) { Text("Check in") } })
+        }
         BoxWithConstraints(
             Modifier.fillMaxSize().padding(
                 horizontal = MaterialTheme.spacing.xl,
@@ -75,9 +81,10 @@ internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) ->
                     ).fillMaxHeight())
                 }
             } else {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
-                    SeatMapPane(uiState, onAction, Modifier.weight(1f))
-                    SeatDetails(uiState, onAction, Modifier.fillMaxWidth())
+                val viewportHeight = maxHeight
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                    SeatMapPane(uiState, onAction, Modifier.fillMaxWidth().height(viewportHeight.coerceAtLeast(MaterialTheme.spacing.heroIcon * 5)))
+                    SeatDetails(uiState, onAction, Modifier.fillMaxWidth().heightIn(max = viewportHeight.coerceAtLeast(MaterialTheme.spacing.heroIcon * 4)))
                 }
             }
         }
@@ -89,12 +96,12 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
     Column(modifier, verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Main theatre", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(uiState.session.room, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (uiState.role == DemoRole.ORGANIZER) {
                         "${uiState.venueRows.sumOf { it.seats.size }} seats · ${uiState.seatLayoutMode.name.lowercase()} layout"
                     } else {
-                        "Current seat ${uiState.confirmedSeat}"
+                        uiState.confirmedSeat.ifBlank { "No seat selected" }
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -123,7 +130,7 @@ private fun VenueMap(uiState: VentUiState, onSeatClick: (String) -> Unit, modifi
     Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.horizontalScroll(rememberScrollState()).padding(MaterialTheme.spacing.lg),
+                Modifier.verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(MaterialTheme.spacing.lg),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
             ) {
@@ -138,7 +145,7 @@ private fun VenueMap(uiState: VentUiState, onSeatClick: (String) -> Unit, modifi
                 }
                 var previousTier: SeatTier? = null
                 uiState.venueRows.forEach { row ->
-                    val tier = row.seats.first().tier
+                    val tier = (row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD)
                     if (tier != previousTier) SectionLabel(
                         if (tier == SeatTier.VIP) "VIP section" else "Standard section",
                         tier == SeatTier.VIP,
@@ -191,8 +198,8 @@ private fun curvedSeatModifier(index: Int, midpoint: Int, curved: Boolean, curve
     if (!curved) return Modifier
     val distance = abs(index - (midpoint - 0.5f))
     return Modifier.graphicsLayer {
-        translationY = distance * curveStep
-        rotationZ = (index - (midpoint - 0.5f)) * 4f
+        translationY = (midpoint - distance).coerceAtLeast(0f) * curveStep
+        rotationZ = (midpoint - 0.5f - index) * 4f
     }
 }
 
@@ -262,7 +269,7 @@ private fun SeatDetails(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
             if (uiState.role == DemoRole.ORGANIZER) {
                 OrganizerSeatControls(uiState, onAction)
             } else {
-                Text("Selected ${uiState.selectedSeat}", style = MaterialTheme.typography.titleLarge)
+                Text(uiState.selectedSeat.ifBlank { "Choose a seat" }, style = MaterialTheme.typography.titleLarge)
                 SeatLegend()
                 if (!uiState.seatSelectionOpen) {
                     Text(
@@ -272,13 +279,12 @@ private fun SeatDetails(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
                 }
                 Text(
                     if (!uiState.seatSelectionOpen) "An organizer must reopen selection before you can move."
+                    else if (uiState.confirmedSeat.isBlank()) "Select an available seat for this session."
                     else if (uiState.selectedSeat == uiState.confirmedSeat) "Choose an outlined seat to move from ${uiState.confirmedSeat}."
                     else "${uiState.selectedSeat} is available. Confirm to move from ${uiState.confirmedSeat}.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (!uiState.seatSelectionOpen || uiState.selectedSeat == uiState.confirmedSeat) {
-                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Seat ${uiState.confirmedSeat} selected") }
-                } else {
+                if (uiState.seatSelectionOpen && uiState.selectedSeat.isNotBlank() && uiState.selectedSeat != uiState.confirmedSeat) {
                     Button(onClick = { onAction(VentAction.ConfirmSeat) }, modifier = Modifier.fillMaxWidth()) { Text("Confirm seat ${uiState.selectedSeat}") }
                 }
             }
@@ -291,7 +297,20 @@ private fun SeatDetails(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
 private fun OrganizerSeatControls(uiState: VentUiState, onAction: (VentAction) -> Unit) {
     val selectedRow = uiState.venueRows.firstOrNull { it.label == uiState.editingRowLabel }
     var confirmRowRemoval by rememberSaveable { mutableStateOf(false) }
+    var more by rememberSaveable { mutableStateOf(false) }
     Text("Edit seating", style = MaterialTheme.typography.titleLarge)
+    Text("Choose Block or Unblock, then tap a seat on the map.")
+    Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+        listOf(SeatAvailability.BLOCKED to "Block", SeatAvailability.AVAILABLE to "Unblock").forEach { (availability, label) ->
+            FilterChip(uiState.seatEditMode == SeatEditMode.AVAILABILITY && uiState.seatEditAvailability == availability,
+                {
+                    onAction(VentAction.SetSeatEditMode(SeatEditMode.AVAILABILITY))
+                    onAction(VentAction.SetSeatEditAvailability(availability))
+                }, { Text(label) })
+        }
+    }
+    TextButton({ more = !more }) { Text(if (more) "Fewer options" else "More options") }
+    if (more) {
     Text(
         "Choose what to edit, select a value, then tap chairs to apply it.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -356,7 +375,7 @@ private fun OrganizerSeatControls(uiState: VentUiState, onAction: (VentAction) -
         val canRemoveSeat = row.seats.size > MIN_SEATS_PER_ROW && row.seats.last().label != uiState.confirmedSeat
         val canRemoveRow = uiState.venueRows.size > 1 && row.seats.none { it.label == uiState.confirmedSeat }
         Text(
-            "Row ${row.label} · ${row.seats.size} seats · ${row.seats.first().tier.name.lowercase()}",
+            "Row ${row.label} · ${row.seats.size} seats · ${(row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD).name.lowercase()}",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
@@ -380,7 +399,7 @@ private fun OrganizerSeatControls(uiState: VentUiState, onAction: (VentAction) -
             }
         }
         FilledTonalButton(onClick = { onAction(VentAction.ToggleEditingRowTier) }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (row.seats.first().tier == SeatTier.VIP) "Change to standard" else "Change to VIP")
+            Text(if ((row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD) == SeatTier.VIP) "Change to standard" else "Change to VIP")
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
             OutlinedButton(
@@ -446,6 +465,7 @@ private fun OrganizerSeatControls(uiState: VentUiState, onAction: (VentAction) -
             checked = uiState.seatSelectionOpen,
             onCheckedChange = { onAction(VentAction.SetSeatSelectionOpen(it)) },
         )
+    }
     }
     Text(
         if (uiState.layoutPublication == LayoutPublication.PUBLISHED) "Published layout" else "Unpublished changes",

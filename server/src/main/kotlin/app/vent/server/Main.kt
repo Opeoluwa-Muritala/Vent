@@ -109,7 +109,15 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
             authenticate("auth-jwt") {
                 get("/me") {
                     val userId = requireNotNull(call.principal<UserPrincipal>()).userId
-                    call.respond(mapOf("id" to userId))
+                    val organizer = dataSource.connection.use { connection ->
+                        connection.prepareStatement(
+                            "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ?::uuid AND role = 'ORGANIZER')",
+                        ).use { statement ->
+                            statement.setString(1, userId)
+                            statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
+                        }
+                    }
+                    call.respond(mapOf("id" to userId, "role" to if (organizer) "ORGANIZER" else "ATTENDEE"))
                 }
                 ventDemoRoutes(AccessControl(dataSource), checkInTokens)
             }

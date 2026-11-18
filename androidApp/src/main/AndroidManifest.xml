@@ -4,6 +4,8 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_vent"
+        android:roundIcon="@mipmap/ic_vent"
         android:label="Vent"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">

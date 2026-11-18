@@ -1,7 +1,10 @@
 package app.vent
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -12,6 +15,12 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -21,6 +30,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vent.api.EventDto
+import app.vent.composeapp.generated.resources.Res
+import app.vent.composeapp.generated.resources.event_poster_wall
+import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.layout.ContentScale
 import app.vent.data.VentApi
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
@@ -42,9 +55,15 @@ data class AuthUiState(
     val error: String? = null,
     val events: List<EventDto> = emptyList(),
     val resendSeconds: Int = 0,
+    val localAttendee: Boolean = false,
+    val organizer: Boolean = false,
 )
 
-class AuthViewModel(private val api: VentApi) : ViewModel() {
+class AuthViewModel(
+    private val api: VentApi,
+    private val localStore: app.vent.data.VentLocalStore? = null,
+    private val allowLocalOrganizer: Boolean = false,
+) : ViewModel() {
     private val mutableState = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = mutableState.asStateFlow()
 
@@ -55,6 +74,7 @@ class AuthViewModel(private val api: VentApi) : ViewModel() {
         if (digits.length == 6) verify()
     }
     fun requestCode() {
+        if (state.value.localAttendee) return
         val email = state.value.email.trim()
         val error = when {
             email.isEmpty() -> "Enter your email."
@@ -69,17 +89,46 @@ class AuthViewModel(private val api: VentApi) : ViewModel() {
         }
     }
     fun verify() {
-        if (state.value.code.length != 6 || state.value.loading) return
+        val current = state.value
+        if (current.step != AuthStep.CODE || current.code.length != 6 || current.loading) return
+        if (current.localAttendee) {
+            val organizer = allowLocalOrganizer && current.email == LOCAL_ORGANIZER_EMAIL
+            if (current.code != (if (organizer) "123456" else "000000")) {
+                mutableState.update { it.copy(code = "", error = "Incorrect on-device code.") }
+                return
+            }
+            mutableState.update { it.copy(step = AuthStep.AUTHENTICATED, code = "", error = null, organizer = organizer) }
+            return
+        }
         launchRequest {
             api.verifyOtp(state.value.email, state.value.code)
+            val organizer = api.isOrganizer()
             val events = api.events()
             mutableState.update {
-                it.copy(step = if (events.size > 1) AuthStep.EVENT_PICKER else AuthStep.AUTHENTICATED, events = events, loading = false, error = null)
+                it.copy(step = if (events.size > 1) AuthStep.EVENT_PICKER else AuthStep.AUTHENTICATED, events = events, loading = false, error = null, organizer = organizer)
             }
         }
     }
     fun changeEmail() = mutableState.update { AuthUiState(email = it.email) }
-    fun chooseEvent(event: EventDto) = mutableState.update { it.copy(step = AuthStep.AUTHENTICATED, events = listOf(event)) }
+    fun signInLocally() {
+        val email = state.value.email.trim().lowercase()
+        if (state.value.step != AuthStep.EMAIL || state.value.loading) return
+        if (email == LOCAL_ORGANIZER_EMAIL && !allowLocalOrganizer) {
+            requestCode()
+            return
+        }
+        launchRequest {
+            val registered = localStore?.load()?.settings?.registeredAttendees.orEmpty()
+            mutableState.value = if (email in registered || (allowLocalOrganizer && email == LOCAL_ORGANIZER_EMAIL)) {
+                AuthUiState(step = AuthStep.CODE, email = email, localAttendee = true)
+            } else state.value.copy(loading = false, error = "This email is not registered on this device.")
+        }
+    }
+    fun chooseEvent(event: EventDto) = mutableState.update {
+        if (it.step == AuthStep.EVENT_PICKER && event in it.events) {
+            it.copy(step = AuthStep.AUTHENTICATED, events = listOf(event))
+        } else it
+    }
     fun signOut() { api.clearSession(); mutableState.value = AuthUiState() }
 
     private fun launchRequest(block: suspend () -> Unit) {
@@ -99,13 +148,16 @@ class AuthViewModel(private val api: VentApi) : ViewModel() {
             }
         }
     }
-    private companion object { val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") }
+    private companion object {
+        const val LOCAL_ORGANIZER_EMAIL = "organizer@vent.demo"
+        val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+    }
 }
 
 @Composable
-fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> Unit, onRequest: () -> Unit, onVerify: () -> Unit, onBack: () -> Unit, onEvent: (EventDto) -> Unit) {
+fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> Unit, onRequest: () -> Unit, onVerify: () -> Unit, onBack: () -> Unit, onEvent: (EventDto) -> Unit, onDemo: () -> Unit) {
     when (state.step) {
-        AuthStep.EMAIL -> EmailScreen(state, onEmail, onRequest)
+        AuthStep.EMAIL -> EmailScreen(state, onEmail, onDemo)
         AuthStep.CODE -> CodeScreen(state, onCode, onVerify, onBack, onRequest)
         AuthStep.EVENT_PICKER -> EventPicker(state.events, onEvent)
         AuthStep.AUTHENTICATED -> Unit
@@ -114,15 +166,54 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
 
 @Composable private fun EmailScreen(state: AuthUiState, onEmail: (String) -> Unit, onSubmit: () -> Unit) {
     val spacing = MaterialTheme.spacing
-    Scaffold { insets -> Column(Modifier.fillMaxSize().padding(insets).imePadding().padding(spacing.xxl), verticalArrangement = Arrangement.spacedBy(spacing.xl)) {
-        Surface(Modifier.size(spacing.touch), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Email, "Vent") } }
-        Spacer(Modifier.weight(1f))
+    val logoInk = MaterialTheme.colorScheme.onPrimary
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { entrance.animateTo(1f, tween(400)) }
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Image(painterResource(Res.drawable.event_poster_wall), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+        Surface(
+            Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(spacing.xxl)
+                .graphicsLayer { alpha = entrance.value; translationY = (1f - entrance.value) * spacing.md.toPx() },
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shadowElevation = spacing.sm,
+        ) {
+            Row(Modifier.padding(spacing.lg), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary) {
+                    androidx.compose.foundation.Canvas(Modifier.size(spacing.touch)) {
+                        val stroke = size.width * .10f
+                        val point = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
+                        drawLine(logoInk, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), point, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+                        drawLine(logoInk, point, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+                    }
+                }
+                Text("Vent", style = MaterialTheme.typography.headlineMedium)
+            }
+        }
+        Surface(
+            modifier = Modifier.safeDrawingPadding().imePadding().padding(spacing.lg)
+                .widthIn(max = spacing.compactBreakpoint).fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = .94f),
+            tonalElevation = spacing.xs,
+            shadowElevation = spacing.sm,
+        ) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.md)) {
         Text("Sign in", style = MaterialTheme.typography.headlineLarge)
-        Text("Enter the email you were registered with. We'll send you a code.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") }, leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading, isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
+        Text("Enter your registered email to continue on this device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
+            placeholder = { Text("attendee@vent.demo") },
+            leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
+            isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
         state.error?.let { ErrorText(it) }
         Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
         Text("Not registered? Ask your organizer to add you.", style = MaterialTheme.typography.bodySmall)
+        }
     } }
 }
 
@@ -132,20 +223,27 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
         Column(Modifier.fillMaxSize().padding(insets).imePadding().padding(horizontal = spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.lg)) {
             Spacer(Modifier.weight(1f))
             Surface(Modifier.size(spacing.heroIcon), shape = MaterialTheme.shapes.extraLarge, border = BorderStroke(spacing.xs, MaterialTheme.colorScheme.primary)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, "Email sent") } }
-            Text("Check your email", style = MaterialTheme.typography.headlineLarge)
-            Text("If ${state.email} is registered, we sent a 6-digit code. It expires in 10 minutes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.localAttendee) "Enter your code" else "Check your email", style = MaterialTheme.typography.headlineLarge)
+            Text(
+                if (state.localAttendee) "Enter the six-digit on-device code."
+                else "If ${state.email} is registered, we sent a 6-digit code. It expires in 10 minutes.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             BasicTextField(value = state.code, onValueChange = onCode, enabled = !state.loading, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done), modifier = Modifier.semantics { contentDescription = "Six digit sign-in code" }, decorationBox = { inner ->
-                Box { Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) { repeat(6) { index -> OutlinedCard(Modifier.size(spacing.touch), border = BorderStroke(spacing.xs, if (state.error == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(state.code.getOrNull(index)?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge) } } } }; Box(Modifier.size(spacing.none)) { inner() } }
+                Box { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.xs)) { repeat(6) { index -> OutlinedCard(Modifier.weight(1f).height(spacing.touch), border = BorderStroke(spacing.xs, if (state.error == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(state.code.getOrNull(index)?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge) } } } }; Box(Modifier.size(spacing.none)) { inner() } }
             })
             state.error?.let { ErrorText(it) }
             Button(onVerify, Modifier.fillMaxWidth().height(spacing.action), enabled = state.code.length == 6 && !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Verify") }
-            TextButton(onResend, enabled = !state.loading && state.resendSeconds == 0) { Text(if (state.resendSeconds > 0) "Resend code in 0:${state.resendSeconds.toString().padStart(2, '0')}" else "Send a new code") }
+            if (!state.localAttendee) {
+                TextButton(onResend, enabled = !state.loading && state.resendSeconds == 0) { Text(if (state.resendSeconds > 0) "Resend code in 0:${state.resendSeconds.toString().padStart(2, '0')}" else "Send a new code") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) { Text("Wrong email?"); TextButton(onBack) { Text("Change it") } }
             Spacer(Modifier.weight(1f))
         }
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable private fun EventPicker(events: List<EventDto>, onEvent: (EventDto) -> Unit) {
     ModalBottomSheet(onDismissRequest = {}) { Column(Modifier.fillMaxWidth().padding(MaterialTheme.spacing.xxl), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
         Text("Choose your event", style = MaterialTheme.typography.headlineSmall)

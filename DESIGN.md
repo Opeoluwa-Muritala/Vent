@@ -2,6 +2,31 @@
 
 <!-- impeccable:design-schema 1 -->
 
+## Current implementation source
+
+The supplied Stitch exports in `.stitch-reference/` are the visual source of truth for Vent. The implemented set includes authentication states, attendee event detail, live QR scanning, organizer attendee management, CSV column mapping, and import validation. Runtime UI is native Compose Multiplatform; the exported HTML is reference material only.
+
+The slate palette uses `#3B5B75` as the light primary, `#D0E4FA` as the primary container, `#53606C` as secondary, and `#F7F9FB` as the base surface. Screen code consumes these through `MaterialTheme.colorScheme` rather than raw values.
+
+## MVI architecture
+
+Every feature screen owns an immutable `State`, sealed `Intent`, optional one-time `Effect`, and a feature-scoped ViewModel. Composables render state and emit intents; they do not mutate workflow state locally. The shared `MviViewModel` exposes a `StateFlow`, a buffered effect flow, and reducer helpers.
+
+Feature presentation code is grouped by responsibility:
+
+- `event/`: event-detail state and intents.
+- `scanner/`: camera/torch state and successful-scan effect.
+- `imports/`: attendee list, mapping, and review workflow state.
+- `architecture/`: reusable MVI base only.
+
+Reusable UI primitives must use neutral responsibility names such as `DetailLine`, `StatusChip`, `ScannerFrame`, or `ImportScaffold`. Do not prefix a reusable component with a screen or feature name. Screen entry points may retain descriptive screen names.
+
+## Future design updates
+
+The company-event companion exports supply the two-day schedule, seat navigator, quests, Wrapped recap, profile, scanner outcomes, and staff console. Use the active seat and check-in state wherever a reference shows example placement. The offline console uses sample attendance and poll counts. Its five destinations are door scanning, occupancy, poll controls, event setup, and projector display.
+
+Match the compact 390 × 844 composition first, then recompose at the 720 dp detail and 840 dp expanded breakpoints. Reuse semantic colors, `MaterialTheme.spacing`, typography, and shapes. For every new screen, document and implement loading, empty, error, success, disabled, and offline states where applicable; add light/dark previews; verify safe areas, keyboard insets, 200% text scaling, and minimum touch targets.
+
 ## Direction
 
 **Signal Hall** turns venue operations into a calm spatial instrument. Curved seating geometry remains Vent’s signature, while deep ink structure, warm paper surfaces, electric teal selections, and amber time signals replace the previous generic purple Material treatment.

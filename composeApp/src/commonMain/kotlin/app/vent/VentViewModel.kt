@@ -1,20 +1,31 @@
 package app.vent
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.vent.architecture.MviViewModel
 import app.vent.data.VentLocalState
 import app.vent.data.VentLocalStore
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class VentScreen { EVENT, SCHEDULE, SEAT, QUESTS, PROFILE, ORGANIZER }
+enum class VentScreen { EVENT, SCHEDULE, SEAT, QUESTS, PROFILE, ORGANIZER, PEOPLE, SCANNER, WRAPPED, DOOR, OCCUPANCY, CONTROLS, SETUP, PROJECTOR, CONFIRMED, DUPLICATE, WRONG, EXPIRED }
 enum class DemoRole { ATTENDEE, ORGANIZER }
 
+private fun Set<String>.toggled(item: String): Set<String> = if (item in this) this - item else this + item
+
 data class VentUiState(
-    val screen: VentScreen = VentScreen.EVENT,
+    val sessionDetails: Map<SummitSession, SessionDetails> = emptyMap(),
+    val questDefinitions: List<QuestDefinition> = emptyList(),
+    val questResponses: Map<String, Map<String, String>> = emptyMap(),
+    val customQuests: List<String> = emptyList(),
+    val attendees: Set<String> = emptySet(),
+    val session: SummitSession = SummitSession.KEYNOTE,
+    val seating: Map<SummitSession, SessionSeating> = emptyMap(),
+    val eventTitle: String = "TechCon Summit 2025",
+    val pollPaused: Boolean = false,
+    val bookmarks: Set<String> = emptySet(),
+    val preferences: Set<String> = emptySet(),
+    val activeGate: String = "West Door 2",
+    val screen: VentScreen = VentScreen.SCHEDULE,
     val role: DemoRole = DemoRole.ATTENDEE,
     val confirmedSeat: String = "B4",
     val selectedSeat: String = "B4",
@@ -32,6 +43,17 @@ data class VentUiState(
 )
 
 sealed interface VentAction {
+    data class SaveSessionDetails(val session: SummitSession, val details: SessionDetails) : VentAction
+    data class PublishQuest(val quest: QuestDefinition) : VentAction
+    data class CompleteQuest(val title: String, val answer: String) : VentAction
+    data class CreateQuest(val title: String) : VentAction
+    data class AddAttendees(val text: String) : VentAction
+    data class OpenSession(val session: SummitSession) : VentAction
+    data class RenameEvent(val title: String) : VentAction
+    data object TogglePoll : VentAction
+    data class Bookmark(val title: String) : VentAction
+    data class TogglePreference(val name: String) : VentAction
+    data class SelectGate(val gate: String) : VentAction
     data class Navigate(val destination: VentScreen) : VentAction
     data class SwitchRole(val role: DemoRole) : VentAction
     data class SelectSeat(val label: String) : VentAction
@@ -56,42 +78,178 @@ sealed interface VentAction {
     data object PublishLayout : VentAction
 }
 
-class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
-    private val _uiState = MutableStateFlow(VentUiState())
-    val uiState: StateFlow<VentUiState> = _uiState.asStateFlow()
+sealed interface VentEffect
+
+private fun VentUiState.sessionSeating() = SessionSeating(confirmedSeat, isCheckedIn, venueRows,
+    seatLayoutMode, seatSelectionOpen, layoutPublication)
+
+class VentViewModel(private val localStore: VentLocalStore, private val attendeeOnly: Boolean = false, private val startAsOrganizer: Boolean = false, private val accountEmail: String = "") : MviViewModel<VentUiState, VentAction, VentEffect>(VentUiState()) {
+    private val writes = kotlinx.coroutines.channels.Channel<VentLocalState>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+    private var expectedWrite: VentLocalState? = null
 
     init {
         viewModelScope.launch {
+            for (snapshot in writes) {
+                runCatching { localStore.save(snapshot) }.onFailure {
+                    if (expectedWrite == snapshot) expectedWrite = null
+                    mutableState.update { state -> state.copy(message = "Changes could not be saved on this device.") }
+                }
+            }
+        }
+        viewModelScope.launch {
             runCatching { localStore.load() }
                 .onSuccess { saved ->
-                    val rows = initialVenueRows()
-                    val seat = saved.confirmedSeat.takeIf { it in rows.selectableSeatLabels() } ?: "B4"
-                    val role = if (saved.organizerMode) DemoRole.ORGANIZER else DemoRole.ATTENDEE
-                    _uiState.value = VentUiState(
-                        screen = if (role == DemoRole.ORGANIZER) VentScreen.ORGANIZER else VentScreen.EVENT,
+                    val rows = saved.settings.rows
+                    val seat = saved.confirmedSeat
+                    val role = if ((startAsOrganizer || saved.organizerMode) && !attendeeOnly) DemoRole.ORGANIZER else DemoRole.ATTENDEE
+                    mutableState.value = VentUiState(
+                        session = saved.settings.session,
+                        seating = saved.settings.seating,
+                        screen = if (role == DemoRole.ORGANIZER) VentScreen.ORGANIZER else VentScreen.SCHEDULE,
                         role = role,
                         confirmedSeat = seat,
                         selectedSeat = seat,
                         isCheckedIn = saved.checkedIn,
                         isLoading = false,
                         venueRows = rows,
+                        eventTitle = saved.settings.title,
+                        bookmarks = saved.settings.bookmarks,
+                        preferences = saved.settings.preferences,
+                        activeGate = saved.settings.gate,
+                        customQuests = saved.settings.customQuests,
+                        attendees = saved.settings.registeredAttendees,
+                        sessionDetails = saved.settings.sessionDetails,
+                        questDefinitions = saved.settings.questDefinitions,
+                        questResponses = saved.settings.questResponses,
+                        pollPaused = saved.settings.paused,
+                        layoutPublication = saved.settings.publication,
+                        seatLayoutMode = saved.settings.layout,
+                        seatSelectionOpen = saved.settings.selectionOpen,
                     )
                 }
                 .onFailure {
-                    _uiState.update { state -> state.copy(isLoading = false, message = "Local data could not be loaded. Using demo defaults.") }
+                    mutableState.update { state -> state.copy(isLoading = false, message = "Local data could not be loaded. Using demo defaults.") }
                 }
+            localStore.changes().collect { saved ->
+                if (expectedWrite != null && expectedWrite != saved) return@collect
+                expectedWrite = null
+                mutableState.update { current ->
+                    current.copy(
+                        session = saved.settings.session,
+                        seating = saved.settings.seating,
+                        confirmedSeat = saved.confirmedSeat,
+                        selectedSeat = if (current.session != saved.settings.session || current.selectedSeat == current.confirmedSeat) saved.confirmedSeat else current.selectedSeat,
+                        isCheckedIn = saved.checkedIn,
+                        eventTitle = saved.settings.title,
+                        bookmarks = saved.settings.bookmarks,
+                        preferences = saved.settings.preferences,
+                        activeGate = saved.settings.gate,
+                        customQuests = saved.settings.customQuests,
+                        attendees = saved.settings.registeredAttendees,
+                        sessionDetails = saved.settings.sessionDetails,
+                        questDefinitions = saved.settings.questDefinitions,
+                        questResponses = saved.settings.questResponses,
+                        pollPaused = saved.settings.paused,
+                        venueRows = saved.settings.rows,
+                        seatLayoutMode = saved.settings.layout,
+                        layoutPublication = saved.settings.publication,
+                        seatSelectionOpen = saved.settings.selectionOpen,
+                    )
+                }
+            }
         }
     }
 
-    fun onAction(action: VentAction) {
+    override fun onIntent(action: VentAction) {
+        val before = mutableState.value
         when (action) {
+            is VentAction.SaveSessionDetails -> if (before.role == DemoRole.ORGANIZER) {
+                val details = action.details
+                if (listOf(details.title, details.time, details.room, details.speaker).all { it.isNotBlank() && it.length <= 160 } &&
+                    (details.headerImage?.length ?: 0) <= 180_000) {
+                    mutableState.update { it.copy(sessionDetails = it.sessionDetails + (action.session to details)) }
+                    persist()
+                }
+            }
+            is VentAction.PublishQuest -> if (before.role == DemoRole.ORGANIZER) {
+                val quest = action.quest
+                if (quest.title.isNotBlank() && quest.title.length <= 100 && quest.prompt.isNotBlank() &&
+                    quest.prompt.length <= 300 && quest.points in 1..1000 &&
+                    quest.kind in setOf("Action", "Poll", "Quiz") &&
+                    (quest.kind == "Action" || quest.options.size in 2..8) &&
+                    (quest.kind != "Quiz" || quest.correctAnswer?.let { it in quest.options } == true) &&
+                    before.questDefinitions.none { it.title.equals(quest.title, true) }) {
+                    mutableState.update { it.copy(questDefinitions = it.questDefinitions + quest) }
+                    persist()
+                }
+            }
+            is VentAction.CompleteQuest -> if (before.role == DemoRole.ATTENDEE && accountEmail.isNotBlank()) {
+                val quest = before.questDefinitions.firstOrNull { it.title == action.title }
+                val responses = before.questResponses[accountEmail].orEmpty()
+                if (quest != null && quest.title !in responses) {
+                    val accepted = when (quest.kind) {
+                        "Action" -> action.answer == "Completed"
+                        "Poll" -> action.answer in quest.options
+                        "Quiz" -> action.answer == quest.correctAnswer
+                        else -> false
+                    }
+                    if (accepted) {
+                        mutableState.update { it.copy(questResponses = it.questResponses + (accountEmail to (responses + (quest.title to action.answer))), message = "Earned ${quest.points} points") }
+                        persist()
+                    } else {
+                        mutableState.update { it.copy(message = "Try another answer.") }
+                    }
+                }
+            }
+            is VentAction.AddAttendees -> if (before.role == DemoRole.ORGANIZER) {
+                val emails = attendeeEmails(action.text)
+                mutableState.update { it.copy(attendees = (it.attendees + emails).take(5000).toSet()) }
+                persist()
+            }
+            is VentAction.CreateQuest -> {
+                val title = action.title.trim().take(100)
+                if (before.role == DemoRole.ORGANIZER && title.isNotEmpty() && before.customQuests.none { it.equals(title, true) }) {
+                    mutableState.update { it.copy(customQuests = it.customQuests + title) }
+                    persist()
+                }
+            }
+            is VentAction.OpenSession -> {
+                val sessions = before.seating + (before.session to before.sessionSeating())
+                val selected = sessions[action.session] ?: SessionSeating()
+                mutableState.update { it.copy(session = action.session, seating = sessions,
+                    selectedSeat = selected.seat, confirmedSeat = selected.seat, isCheckedIn = selected.checkedIn,
+                    venueRows = selected.rows, seatLayoutMode = selected.layout, seatSelectionOpen = selected.open,
+                    layoutPublication = selected.publication, editingRowLabel = selected.rows.first().label,
+                    screen = VentScreen.EVENT, message = null) }
+                persist()
+            }
+            is VentAction.Bookmark -> {
+                mutableState.update { it.copy(bookmarks = it.bookmarks.toggled(action.title)) }
+                persist()
+            }
+            is VentAction.TogglePreference -> {
+                mutableState.update { it.copy(preferences = it.preferences.toggled(action.name)) }
+                persist()
+            }
+            is VentAction.SelectGate -> if (before.role == DemoRole.ORGANIZER) {
+                mutableState.update { it.copy(activeGate = action.gate) }
+                persist()
+            }
+            is VentAction.RenameEvent -> if (mutableState.value.role == DemoRole.ORGANIZER && action.title.isNotBlank()) {
+                mutableState.update { it.copy(eventTitle = action.title.trim()) }
+                persist()
+            }
+            VentAction.TogglePoll -> if (mutableState.value.role == DemoRole.ORGANIZER) {
+                mutableState.update { it.copy(pollPaused = !it.pollPaused) }
+                persist()
+            }
             is VentAction.Navigate -> navigate(action.destination)
             is VentAction.SwitchRole -> switchRole(action.role)
             is VentAction.SelectSeat -> selectSeat(action.label)
-            VentAction.LocateConfirmedSeat -> _uiState.update { it.copy(selectedSeat = it.confirmedSeat, message = "Showing seat ${it.confirmedSeat}") }
+            VentAction.LocateConfirmedSeat -> mutableState.update { it.copy(selectedSeat = it.confirmedSeat, message = "Showing seat ${it.confirmedSeat}") }
             VentAction.ConfirmSeat -> confirmSeat()
             VentAction.CheckIn -> checkIn()
-            VentAction.ClearMessage -> _uiState.update { it.copy(message = null) }
+            VentAction.ClearMessage -> mutableState.update { it.copy(message = null) }
             is VentAction.SetSeatLayout -> setSeatLayout(action.mode)
             VentAction.AddSeatRow -> addSeatRow()
             is VentAction.SetSeatEditMode -> setSeatEditMode(action.mode)
@@ -108,23 +266,29 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
             VentAction.SaveLayoutDraft -> setLayoutPublication(LayoutPublication.DRAFT)
             VentAction.PublishLayout -> setLayoutPublication(LayoutPublication.PUBLISHED)
         }
+        val after = mutableState.value
+        if (action !is VentAction.OpenSession && (before.venueRows != after.venueRows || before.seatLayoutMode != after.seatLayoutMode ||
+            before.layoutPublication != after.layoutPublication || before.seatSelectionOpen != after.seatSelectionOpen)) persist()
     }
 
+    fun onAction(action: VentAction) = onIntent(action)
+
     private fun navigate(destination: VentScreen) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             val allowed = when (state.role) {
-                DemoRole.ATTENDEE -> destination != VentScreen.ORGANIZER
-                DemoRole.ORGANIZER -> destination != VentScreen.EVENT && destination != VentScreen.QUESTS
+                DemoRole.ATTENDEE -> destination !in staffScreens && destination !in setOf(VentScreen.ORGANIZER, VentScreen.PEOPLE)
+                DemoRole.ORGANIZER -> destination != VentScreen.SCANNER
             }
             if (allowed) state.copy(screen = destination) else state
         }
     }
 
     private fun switchRole(role: DemoRole) {
-        _uiState.update {
+        if (attendeeOnly && role != DemoRole.ATTENDEE) return
+        mutableState.update {
             it.copy(
                 role = role,
-                screen = if (role == DemoRole.ORGANIZER) VentScreen.ORGANIZER else VentScreen.EVENT,
+                screen = if (role == DemoRole.ORGANIZER) VentScreen.ORGANIZER else VentScreen.SCHEDULE,
                 message = if (role == DemoRole.ORGANIZER) "Organizer workspace active" else "Attendee experience active",
             )
         }
@@ -132,7 +296,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun selectSeat(label: String) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (
                 state.role == DemoRole.ATTENDEE &&
                 state.seatSelectionOpen &&
@@ -142,35 +306,37 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun confirmSeat() {
-        val state = _uiState.value
+        val state = mutableState.value
         if (
             state.role != DemoRole.ATTENDEE ||
             !state.seatSelectionOpen ||
             state.selectedSeat !in state.venueRows.selectableSeatLabels() ||
             state.selectedSeat == state.confirmedSeat
         ) return
-        _uiState.update { it.copy(confirmedSeat = it.selectedSeat, message = "Seat changed to ${it.selectedSeat}") }
+        mutableState.update { it.copy(confirmedSeat = it.selectedSeat, message = "Seat changed to ${it.selectedSeat}") }
         persist()
     }
 
     private fun checkIn() {
-        val state = _uiState.value
+        val state = mutableState.value
         if (state.role != DemoRole.ATTENDEE || state.isCheckedIn) return
-        _uiState.update { it.copy(isCheckedIn = true, message = "Checked in for Opening keynote · Seat ${it.confirmedSeat}") }
+        mutableState.update { it.copy(isCheckedIn = true, message = "Checked in for ${it.session.title}") }
         persist()
     }
 
     private fun persist() {
-        val state = _uiState.value
-        val localState = VentLocalState(state.confirmedSeat, state.isCheckedIn, state.role == DemoRole.ORGANIZER)
-        viewModelScope.launch {
-            runCatching { localStore.save(localState) }
-                .onFailure { _uiState.update { it.copy(message = "Changes could not be saved locally. Try again.") } }
-        }
+        val state = mutableState.value
+        val localState = VentLocalState(state.confirmedSeat, state.isCheckedIn, state.role == DemoRole.ORGANIZER,
+            app.vent.data.SummitSettings(state.eventTitle, state.pollPaused, state.venueRows, state.seatLayoutMode,
+                state.layoutPublication, state.seatSelectionOpen, state.bookmarks, state.preferences, state.activeGate,
+                state.session, state.seating + (state.session to state.sessionSeating()), state.customQuests, state.attendees,
+                state.sessionDetails, state.questDefinitions, state.questResponses))
+        expectedWrite = localState
+        writes.trySend(localState)
     }
 
     private fun setSeatLayout(mode: SeatLayoutMode) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER) state.copy(
                 seatLayoutMode = mode,
                 layoutPublication = LayoutPublication.DRAFT,
@@ -180,7 +346,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun addSeatRow() {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER || state.venueRows.size >= MAX_VENUE_ROWS) return@update state
             val rowLabel = ('A'..'Z')
                 .firstOrNull { candidate -> state.venueRows.none { it.label == candidate.toString() } }
@@ -199,25 +365,25 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun setSeatEditMode(mode: SeatEditMode) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER) state.copy(seatEditMode = mode, message = null) else state
         }
     }
 
     private fun setSeatEditAvailability(availability: SeatAvailability) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER) state.copy(seatEditAvailability = availability, message = null) else state
         }
     }
 
     private fun setSeatEditType(type: SeatType) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER) state.copy(seatEditType = type, message = null) else state
         }
     }
 
     private fun applySeatEdit(label: String) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER || state.venueRows.none { row -> row.seats.any { it.label == label } }) {
                 return@update state
             }
@@ -234,7 +400,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun selectEditingRow(label: String) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER && state.venueRows.any { it.label == label }) {
                 state.copy(editingRowLabel = label, message = null)
             } else state
@@ -242,7 +408,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun resizeEditingRow(delta: Int) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER || delta !in setOf(-1, 1)) return@update state
             val target = state.venueRows.firstOrNull { it.label == state.editingRowLabel } ?: return@update state
             val newSize = target.seats.size + delta
@@ -251,9 +417,9 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
             val resized = if (delta > 0) {
                 target.seats + VenueSeat(
                     label = "${target.label}$newSize",
-                    tier = target.seats.first().tier,
+                    tier = (target.seats.firstOrNull()?.tier ?: SeatTier.STANDARD),
                     availability = SeatAvailability.AVAILABLE,
-                    type = target.seats.first().type,
+                    type = target.seats.firstOrNull()?.type ?: SeatType.STANDARD,
                 )
             } else {
                 target.seats.dropLast(1)
@@ -267,10 +433,10 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun toggleEditingRowTier() {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER) return@update state
             val target = state.venueRows.firstOrNull { it.label == state.editingRowLabel } ?: return@update state
-            val tier = if (target.seats.first().tier == SeatTier.VIP) SeatTier.STANDARD else SeatTier.VIP
+            val tier = if ((target.seats.firstOrNull()?.tier ?: SeatTier.STANDARD) == SeatTier.VIP) SeatTier.STANDARD else SeatTier.VIP
             state.copy(
                 venueRows = state.venueRows.map { row ->
                     if (row.label == target.label) row.copy(seats = row.seats.map { it.copy(tier = tier) }) else row
@@ -282,7 +448,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun moveEditingRow(offset: Int) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER || offset !in setOf(-1, 1)) return@update state
             val from = state.venueRows.indexOfFirst { it.label == state.editingRowLabel }
             val to = from + offset
@@ -296,7 +462,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun removeEditingRow() {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER || state.venueRows.size <= 1) return@update state
             val target = state.venueRows.firstOrNull { it.label == state.editingRowLabel } ?: return@update state
             if (target.seats.any { it.label == state.confirmedSeat }) return@update state
@@ -311,7 +477,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun setSeatSelectionOpen(open: Boolean) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role == DemoRole.ORGANIZER) state.copy(
                 seatSelectionOpen = open,
                 layoutPublication = LayoutPublication.DRAFT,
@@ -321,7 +487,7 @@ class VentViewModel(private val localStore: VentLocalStore) : ViewModel() {
     }
 
     private fun setLayoutPublication(publication: LayoutPublication) {
-        _uiState.update { state ->
+        mutableState.update { state ->
             if (state.role != DemoRole.ORGANIZER) return@update state
             state.copy(
                 layoutPublication = publication,

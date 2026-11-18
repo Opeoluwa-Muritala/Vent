@@ -7,16 +7,18 @@ enum class SeatType { STANDARD, VIP, ACCESSIBLE, COMPANION }
 enum class SeatEditMode { TYPE, AVAILABILITY }
 enum class LayoutPublication { DRAFT, PUBLISHED }
 
-const val MIN_SEATS_PER_ROW = 2
+const val MIN_SEATS_PER_ROW = 0
 const val MAX_SEATS_PER_ROW = 30
 const val MAX_VENUE_ROWS = 26
 
+@kotlinx.serialization.Serializable
 data class VenueSeat(
     val label: String,
     val tier: SeatTier,
     val availability: SeatAvailability,
     val type: SeatType,
 )
+@kotlinx.serialization.Serializable
 data class VenueRow(val label: String, val seats: List<VenueSeat>)
 
 private val initiallyBookedSeats = setOf(

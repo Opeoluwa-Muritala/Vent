@@ -60,7 +60,12 @@ embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.ref = 
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.12.0" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version = "1.4.2" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version = "1.4.2" }
+androidx-camera-mlkit-vision = { module = "androidx.camera:camera-mlkit-vision", version = "1.4.2" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version = "17.3.0" }
 jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 navigation3-browser = { module = "com.github.terrakok:navigation3-browser", version.ref = "navigation3Browser" }
 

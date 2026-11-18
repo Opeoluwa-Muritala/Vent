@@ -14,6 +14,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 interface VentApi {
+    suspend fun isOrganizer(): Boolean = false
     suspend fun requestOtp(email: String): OtpRequestResponse
     suspend fun verifyOtp(email: String, code: String): AuthResponse
     suspend fun events(): List<EventDto>
@@ -26,6 +27,8 @@ interface VentApi {
 }
 
 class VentApiClient(private val baseUrl: String, private val client: HttpClient = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false }) } }) : VentApi {
+    override suspend fun isOrganizer(): Boolean =
+        authorizedGet<Map<String, String>>("/api/v1/me")["role"] == "ORGANIZER"
     private var accessToken: String? = null
     override suspend fun requestOtp(email: String): OtpRequestResponse = client.post("$baseUrl/api/v1/auth/otp/request") {
         contentType(ContentType.Application.Json)
