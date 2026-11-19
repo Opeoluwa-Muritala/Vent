@@ -22,6 +22,8 @@ data class VentUiState(
     val session: SummitSession = SummitSession.KEYNOTE,
     val seating: Map<SummitSession, SessionSeating> = emptyMap(),
     val eventTitle: String = "TechCon Summit 2025",
+    val eventDays: Int = 2,
+    val eventAccent: Int? = null,
     val pollPaused: Boolean = false,
     val bookmarks: Set<String> = emptySet(),
     val preferences: Set<String> = emptySet(),
@@ -53,6 +55,8 @@ sealed interface VentAction {
     data class AddAttendees(val text: String) : VentAction
     data class OpenSession(val session: SummitSession) : VentAction
     data class RenameEvent(val title: String) : VentAction
+    data class SetEventDays(val count: Int) : VentAction
+    data class SetEventAccent(val argb: Int?) : VentAction
     data object TogglePoll : VentAction
     data class Bookmark(val title: String) : VentAction
     data class TogglePreference(val name: String) : VentAction
@@ -120,6 +124,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         isLoading = false,
                         venueRows = rows,
                         eventTitle = saved.settings.title,
+                        eventDays = saved.settings.eventDays,
+                        eventAccent = saved.settings.eventAccent,
                         bookmarks = saved.settings.bookmarks,
                         preferences = saved.settings.preferences,
                         activeGate = saved.settings.gate,
@@ -152,6 +158,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         selectedSeat = if (current.session != saved.settings.session || current.selectedSeat == current.confirmedSeat) confirmed else current.selectedSeat,
                         isCheckedIn = saved.checkedIn,
                         eventTitle = saved.settings.title,
+                        eventDays = saved.settings.eventDays,
+                        eventAccent = saved.settings.eventAccent,
                         bookmarks = saved.settings.bookmarks,
                         preferences = saved.settings.preferences,
                         activeGate = saved.settings.gate,
@@ -175,7 +183,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
     override fun onIntent(action: VentAction) {
         val before = mutableState.value
         when (action) {
-            is VentAction.CreateSession -> if (before.role == DemoRole.ORGANIZER && action.details.isValid()) {
+            is VentAction.CreateSession -> if (before.role == DemoRole.ORGANIZER && action.details.isValid(before.eventDays)) {
                 val index = before.sessionDetails.keys.mapNotNull { it.name.removePrefix("LOCAL_").toIntOrNull() }.maxOrNull() ?: 0
                 if (index < 1000) {
                     val session = SummitSession("LOCAL_${index + 1}")
@@ -198,7 +206,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
             }
             is VentAction.SaveSessionDetails -> if (before.role == DemoRole.ORGANIZER) {
                 val details = action.details
-                if (details.isValid() && (action.session in SummitSession.entries || action.session in before.sessionDetails)) {
+                if (details.isValid(before.eventDays) && (action.session in SummitSession.entries || action.session in before.sessionDetails)) {
                     mutableState.update { it.copy(sessionDetails = it.sessionDetails + (action.session to details)) }
                     persist()
                 }
@@ -271,6 +279,18 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
             }
             is VentAction.RenameEvent -> if (mutableState.value.role == DemoRole.ORGANIZER && action.title.isNotBlank()) {
                 mutableState.update { it.copy(eventTitle = action.title.trim()) }
+                persist()
+            }
+            is VentAction.SetEventDays -> if (before.role == DemoRole.ORGANIZER && action.count in 1..MAX_EVENT_DAYS) {
+                if (before.sessionDetails.values.any { it.day > action.count }) {
+                    mutableState.update { it.copy(message = "Move sessions from the removed days first.") }
+                } else {
+                    mutableState.update { it.copy(eventDays = action.count, message = null) }
+                    persist()
+                }
+            }
+            is VentAction.SetEventAccent -> if (before.role == DemoRole.ORGANIZER) {
+                mutableState.update { it.copy(eventAccent = action.argb) }
                 persist()
             }
             VentAction.TogglePoll -> if (mutableState.value.role == DemoRole.ORGANIZER) {
@@ -370,7 +390,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
             app.vent.data.SummitSettings(state.eventTitle, state.pollPaused, state.venueRows, state.seatLayoutMode,
                 state.layoutPublication, state.seatSelectionOpen, state.bookmarks, state.preferences, state.activeGate,
                 state.session, state.seating + (state.session to state.sessionSeating()), state.customQuests, state.attendees,
-                state.sessionDetails, state.questDefinitions, state.questResponses, state.seatAssignments))
+                state.sessionDetails, state.questDefinitions, state.questResponses, state.seatAssignments,
+                eventDays = state.eventDays, eventAccent = state.eventAccent))
         expectedWrite = localState
         writes.trySend(localState)
     }

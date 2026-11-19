@@ -7,9 +7,11 @@ data class SessionDetails(
     val day: Int = 1,
 )
 
-internal fun SessionDetails.isValid(): Boolean =
+internal const val MAX_EVENT_DAYS = 30
+
+internal fun SessionDetails.isValid(eventDays: Int = 2): Boolean =
     listOf(title, time, room, speaker).all { it.isNotBlank() && it.length <= 160 } &&
-        day in 1..2 && (headerImage?.length ?: 0) <= 180_000
+        day in 1..eventDays && (headerImage?.length ?: 0) <= 180_000
 
 @kotlinx.serialization.Serializable
 data class QuestDefinition(

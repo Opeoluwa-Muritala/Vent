@@ -3,6 +3,12 @@ package app.vent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,41 +18,23 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import app.vent.architecture.MviViewModel
+import androidx.compose.ui.semantics.Role
 import app.vent.composeapp.generated.resources.*
 import app.vent.ui.theme.spacing
 import org.jetbrains.compose.resources.painterResource
-
-private val talks = SummitSession.entries.filter { it != SummitSession.KEYNOTE }
-private data class Agenda(val day: Int = 1, val track: String = "All Tracks", val search: String = "", val saved: Set<String> = emptySet())
-private sealed interface AgendaIntent {
-    data class Day(val day: Int) : AgendaIntent
-    data class Track(val track: String) : AgendaIntent
-    data class Search(val query: String) : AgendaIntent
-    data class Bookmark(val title: String) : AgendaIntent
-}
-private class SessionsModel : MviViewModel<Agenda, AgendaIntent, Nothing>(Agenda()) {
-    override fun onIntent(intent: AgendaIntent) = reduce {
-        when (intent) {
-            is AgendaIntent.Day -> copy(day = intent.day)
-            is AgendaIntent.Track -> copy(track = intent.track)
-            is AgendaIntent.Search -> copy(search = intent.query)
-            is AgendaIntent.Bookmark -> copy(saved = if (intent.title in saved) saved - intent.title else saved + intent.title)
-        }
-    }
-}
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
-    val model = viewModel { SessionsModel() }
-    val state by model.uiState.collectAsState()
+    val pager = rememberPagerState { ui.eventDays }
+    val scope = rememberCoroutineScope()
     val space = MaterialTheme.spacing
     val scheme = MaterialTheme.colorScheme
     val sessionColors = CardDefaults.cardColors(scheme.primaryContainer, scheme.onPrimaryContainer)
@@ -55,87 +43,119 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
         4.dp, MaterialTheme.shapes.extraLarge,
         ambientColor = scheme.primary, spotColor = scheme.primary,
     )
-    var searchOpen by remember { mutableStateOf(false) }
-    val sessions = (SummitSession.entries + ui.sessionDetails.keys).distinct().filter { session ->
-        val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
-        details.day == state.day && listOf(details.title, details.speaker, details.room).any { it.contains(state.search, ignoreCase = true) }
-    }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var createSession by rememberSaveable { mutableStateOf(false) }
+    val organizer = ui.role == DemoRole.ORGANIZER
 
-    Column(Modifier.fillMaxSize().conferencePattern().safeDrawingPadding()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = space.lg)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(ui.eventTitle, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                IconButton({
-                    searchOpen = !searchOpen
-                    if (!searchOpen) model.onIntent(AgendaIntent.Search(""))
-                }) { Icon(if (searchOpen) Icons.Outlined.Close else Icons.Outlined.Search, if (searchOpen) "Close search" else "Search sessions") }
-                IconButton({ dispatch(VentAction.Navigate(VentScreen.PROFILE)) }) {
-                    Image(painterResource(Res.drawable.pass_portrait), "Profile",
-                        Modifier.size(space.xxl).clip(androidx.compose.foundation.shape.CircleShape),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-                }
-            }
-            if (searchOpen) {
-                OutlinedTextField(state.search, { model.onIntent(AgendaIntent.Search(it)) },
-                    Modifier.fillMaxWidth(), placeholder = { Text("Search sessions") }, singleLine = true)
-            }
-        }
-        LazyColumn(
-            Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(horizontal = space.lg, vertical = space.sm),
-            verticalArrangement = Arrangement.spacedBy(space.md),
-        ) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(space.sm),
-                ) {
-                    listOf(1, 2).forEach { day ->
-                        FilterChip(
-                            selected = state.day == day,
-                            onClick = { model.onIntent(AgendaIntent.Day(day)) },
-                            label = { Text("Day $day · Oct ${23 + day}") },
-                            leadingIcon = { Icon(Icons.Outlined.CalendarToday, null, Modifier.size(FilterChipDefaults.IconSize)) },
-                            shape = MaterialTheme.shapes.extraLarge,
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = scheme.surfaceContainerHighest,
-                                selectedContainerColor = scheme.primaryContainer,
-                                selectedLabelColor = scheme.onPrimaryContainer,
-                                selectedLeadingIconColor = scheme.onPrimaryContainer,
-                            ),
-                            border = null,
-                        )
+    Box(Modifier.fillMaxSize().conferencePattern().safeDrawingPadding()) {
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = space.lg)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(ui.eventTitle, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    IconButton({
+                        searchOpen = !searchOpen
+                        if (!searchOpen) search = ""
+                    }) { Icon(if (searchOpen) Icons.Outlined.Close else Icons.Outlined.Search, if (searchOpen) "Close search" else "Search sessions") }
+                    IconButton({ dispatch(VentAction.Navigate(VentScreen.PROFILE)) }) {
+                        Image(painterResource(Res.drawable.pass_portrait), "Profile",
+                            Modifier.size(space.xxl).clip(androidx.compose.foundation.shape.CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                     }
                 }
+                if (searchOpen) {
+                    OutlinedTextField(search, { search = it },
+                        Modifier.fillMaxWidth(), placeholder = { Text("Search sessions") }, singleLine = true)
+                }
             }
-            if (sessions.isEmpty()) item { Text(if (state.search.isBlank()) "No sessions scheduled" else "No matching sessions") }
-            sessions.groupBy { sessionStartLabel(ui.sessionDetails[it]?.time ?: it.time) }.forEach { (time, concurrent) ->
-                item(key = "time:$time") { Text(time, style = MaterialTheme.typography.labelLarge) }
-                items(concurrent, key = { it.name }) { session ->
+            VentPillTabs(List(ui.eventDays) { "Day ${it + 1}" }, pager.currentPage) { page ->
+                scope.launch { pager.animateScrollToPage(page) }
+            }
+            HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top) { page ->
+                val sessions = (SummitSession.entries + ui.sessionDetails.keys).distinct().filter { session ->
                     val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
-                    if (session == SummitSession.KEYNOTE) {
-                        KeynoteCard(details, sessionColors, sessionBorder, sessionShadow) { dispatch(VentAction.OpenSession(session)) }
-                    } else {
-                        Card(
-                            onClick = { dispatch(VentAction.OpenSession(session)) },
-                            modifier = Modifier.fillMaxWidth().height(space.heroIcon + space.xxxl).then(sessionShadow),
-                            shape = MaterialTheme.shapes.extraLarge,
-                            colors = sessionColors,
-                            border = sessionBorder,
-                        ) {
-                            Row(Modifier.fillMaxSize().padding(space.lg), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(space.md)) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(space.sm)) {
-                                    Text(details.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                                        maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Text("${details.room} · ${details.speaker}", style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    details.day == page + 1 && listOf(details.title, details.speaker, details.room).any { it.contains(search, ignoreCase = true) }
+                }
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = space.lg, end = space.lg, top = space.sm,
+                        bottom = if (organizer) space.heroIcon + space.lg else space.sm),
+                    verticalArrangement = Arrangement.spacedBy(space.md),
+                ) {
+                    if (sessions.isEmpty()) item { Text(if (search.isBlank()) "No sessions scheduled" else "No matching sessions") }
+                    sessions.groupBy { sessionStartLabel(ui.sessionDetails[it]?.time ?: it.time) }.forEach { (time, concurrent) ->
+                        item(key = "time:$time") { Text(time, style = MaterialTheme.typography.labelLarge) }
+                        items(concurrent, key = { it.name }) { session ->
+                            val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
+                            if (session == SummitSession.KEYNOTE) {
+                                KeynoteCard(details, sessionColors, sessionBorder, sessionShadow) { dispatch(VentAction.OpenSession(session)) }
+                            } else {
+                                Card(
+                                    onClick = { dispatch(VentAction.OpenSession(session)) },
+                                    modifier = Modifier.fillMaxWidth().height(space.heroIcon + space.xxxl).then(sessionShadow),
+                                    shape = MaterialTheme.shapes.extraLarge,
+                                    colors = sessionColors,
+                                    border = sessionBorder,
+                                ) {
+                                    Row(Modifier.fillMaxSize().padding(space.lg), verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(space.md)) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(space.sm)) {
+                                            Text(details.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            Text("${details.room} · ${details.speaker}", style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        }
+                                        Icon(Icons.Outlined.ArrowForward, contentDescription = null)
+                                    }
                                 }
-                                Icon(Icons.Outlined.ArrowForward, contentDescription = null)
                             }
                         }
                     }
+                }
+            }
+        }
+        if (organizer) {
+            FloatingActionButton({ createSession = true }, Modifier.align(Alignment.BottomEnd).padding(space.lg)) {
+                Icon(Icons.Outlined.Add, "Add session")
+            }
+        }
+    }
+    if (createSession && organizer) {
+        EditSessionDialog(SessionDetails("", "", "", "", day = pager.currentPage + 1), { createSession = false },
+            creating = true, eventDays = ui.eventDays) {
+            dispatch(VentAction.CreateSession(it))
+            createSession = false
+        }
+    }
+}
+
+@Composable
+internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    val space = MaterialTheme.spacing
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().selectableGroup().horizontalScroll(rememberScrollState())
+            .padding(horizontal = space.lg, vertical = space.xs),
+        horizontalArrangement = Arrangement.spacedBy(space.xs),
+    ) {
+        labels.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            val requester = remember { BringIntoViewRequester() }
+            LaunchedEffect(selected) {
+                if (selected) requester.bringIntoView()
+            }
+            Surface(
+                Modifier.clip(MaterialTheme.shapes.extraLarge)
+                    .bringIntoViewRequester(requester)
+                    .selectable(selected, role = Role.Tab, onClick = { onSelect(index) })
+                    .heightIn(min = space.touch),
+                color = if (selected) scheme.primary else scheme.surface,
+                contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+                shape = MaterialTheme.shapes.extraLarge,
+            ) {
+                Box(Modifier.padding(horizontal = space.lg), contentAlignment = Alignment.Center) {
+                    Text(label, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

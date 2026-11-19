@@ -22,6 +22,33 @@ class VentViewModelTest {
     @BeforeTest fun setUp() { Dispatchers.setMain(dispatcher) }
     @AfterTest fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun eventDaysPersistAndCannotHideAnExistingSession() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.SetEventDays(3))
+        model.onAction(VentAction.CreateSession(SessionDetails("Day three talk", "10:00 AM – 11:00 AM", "Hall A", "Speaker", day = 3)))
+        model.onAction(VentAction.SetEventDays(2))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(3, store.saved.settings.eventDays)
+        assertEquals(3, store.saved.settings.sessionDetails.values.single().day)
+        assertEquals("Move sessions from the removed days first.", model.uiState.value.message)
+    }
+
+    @Test fun eventAccentIsRestoredFromSavedSettings() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        val sage = 0xFFBCCBB0.toInt()
+        model.onAction(VentAction.SetEventAccent(sage))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val reopened = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(sage, reopened.uiState.value.eventAccent)
+    }
+
     @Test fun onlyOrganizerCreatesSessionsAndEachSessionSurvivesReload() = runTest {
         val store = FakeLocalStore()
         val model = VentViewModel(store)

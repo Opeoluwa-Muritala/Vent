@@ -24,6 +24,8 @@ data class SummitSettings(
     val questResponses: Map<String, Map<String, String>> = emptyMap(),
     val seatAssignments: Map<SummitSession, Map<String, String>> = emptyMap(),
     val preferencesPendingSync: Boolean = false,
+    val eventDays: Int = 2,
+    val eventAccent: Int? = null,
 ) {
     // Older snapshots may have saved the original seeded address explicitly.
     val registeredAttendees: Set<String>

@@ -124,7 +124,7 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
             }
         }
     }
-    if (editing && uiState.role == DemoRole.ORGANIZER) EditSessionDialog(details, { editing = false }) {
+    if (editing && uiState.role == DemoRole.ORGANIZER) EditSessionDialog(details, { editing = false }, eventDays = uiState.eventDays) {
         onAction(VentAction.SaveSessionDetails(session, it))
         editing = false
     }
@@ -145,7 +145,7 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
             }
             Text(details.title, color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                Icon(Icons.Outlined.CalendarMonth, null, tint = ink); Text("Day ${details.day} · Oct ${23 + details.day}", color = ink)
+                Icon(Icons.Outlined.CalendarMonth, null, tint = ink); Text("Day ${details.day}", color = ink)
             }
         }
     }

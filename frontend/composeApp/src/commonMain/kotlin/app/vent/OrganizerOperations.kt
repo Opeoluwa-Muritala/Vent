@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -12,6 +14,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,50 +32,59 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 @Composable
-internal fun OrganizerOperations(screen: VentScreen, ui: VentUiState, dispatch: (VentAction) -> Unit, onAccentChange: (Int?) -> Unit = {}) {
+internal fun OrganizerOperations(
+    screen: VentScreen,
+    ui: VentUiState,
+    dispatch: (VentAction) -> Unit,
+    onSignOut: (() -> Unit)? = null,
+) {
     if (ui.role != DemoRole.ORGANIZER) return
-    val space = MaterialTheme.spacing
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        IconButton({ dispatch(VentAction.Navigate(VentScreen.PROFILE)) }) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to settings")
+        IconButton({ dispatch(VentAction.Navigate(VentScreen.ORGANIZER)) }) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to events")
         }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = space.lg),
-            horizontalArrangement = Arrangement.spacedBy(space.sm),
-        ) {
-            organizerOperationTabs.forEach { (destination, label) ->
-                FilterChip(screen == destination, { dispatch(VentAction.Navigate(destination)) }, { Text(label) })
+        if (screen == VentScreen.SETUP) {
+            val pager = rememberPagerState { 2 }
+            val scope = rememberCoroutineScope()
+            VentPillTabs(listOf("Event setup", "Live controls"), pager.currentPage) { page ->
+                scope.launch { pager.animateScrollToPage(page) }
             }
-        }
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier.widthIn(max = space.detailBreakpoint).fillMaxWidth()
-                    .verticalScroll(rememberScrollState()).padding(space.lg),
-                verticalArrangement = Arrangement.spacedBy(space.lg),
-            ) {
+            HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top) { page ->
+                OperationsPage(Modifier.fillMaxSize()) {
+                    if (page == 0) SetupOperations(ui, dispatch, onSignOut)
+                    else LiveOperations(ui, dispatch)
+                }
+            }
+        } else {
+            OperationsPage(Modifier.fillMaxWidth().weight(1f)) {
                 when (screen) {
                     VentScreen.DOOR -> DoorOperations(ui, dispatch)
                     VentScreen.OCCUPANCY -> OccupancyOperations(ui, dispatch)
-                    VentScreen.CONTROLS -> LiveOperations(ui, dispatch)
-                    else -> SetupOperations(ui, dispatch, onAccentChange)
+                    else -> LiveOperations(ui, dispatch)
                 }
             }
         }
     }
 }
 
-internal val organizerOperationTabs = linkedMapOf(
-    VentScreen.SETUP to "Event setup",
-    VentScreen.DOOR to "Door scan",
-    VentScreen.OCCUPANCY to "Occupancy",
-    VentScreen.CONTROLS to "Live controls",
-)
+@Composable
+private fun OperationsPage(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val space = MaterialTheme.spacing
+    Box(modifier, contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = space.detailBreakpoint).fillMaxWidth()
+                .verticalScroll(rememberScrollState()).padding(space.lg),
+            verticalArrangement = Arrangement.spacedBy(space.lg),
+            content = content,
+        )
+    }
+}
 
 @Composable
 private fun OpsCard(content: @Composable ColumnScope.() -> Unit) {
     val space = MaterialTheme.spacing
     Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Column(Modifier.fillMaxWidth().padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.md), content = content)
     }
 }
@@ -246,7 +258,6 @@ private fun OccupancyMetric(label: String, count: Int, modifier: Modifier) {
 @Composable
 private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     val space = MaterialTheme.spacing
-    var createQuest by rememberSaveable { mutableStateOf(false) }
     OpsCard {
         OpsHeading(Icons.Outlined.Tune, ui.session.title)
         Text("${ui.session.room} · ${ui.session.time}", style = MaterialTheme.typography.bodySmall)
@@ -269,17 +280,12 @@ private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     }
     OpsHeading(Icons.Outlined.Bolt, "Summit Quest & Stage Triggers")
     OpsCard {
-        Text("Create a quest for this event", style = MaterialTheme.typography.titleMedium)
-        Button({ createQuest = true }, Modifier.fillMaxWidth()) { Text("Create quest") }
-    }
-    if (createQuest) CreateQuestDialog({ createQuest = false }) {
-        dispatch(VentAction.PublishQuest(it))
-        createQuest = false
+        Button({ dispatch(VentAction.Navigate(VentScreen.QUESTS)) }, Modifier.fillMaxWidth()) { Text("Open quests") }
     }
 }
 
 @Composable
-private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onAccentChange: (Int?) -> Unit) {
+private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onSignOut: (() -> Unit)?) {
     val space = MaterialTheme.spacing
     var title by rememberSaveable(ui.eventTitle) { mutableStateOf(ui.eventTitle) }
     OpsCard {
@@ -289,8 +295,23 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onA
     OpsCard {
         OpsHeading(Icons.Outlined.CalendarMonth, "Summit Metadata")
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Event title") }, singleLine = true)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Event days", Modifier.weight(1f))
+            IconButton({ dispatch(VentAction.SetEventDays(ui.eventDays - 1)) }, enabled = ui.eventDays > 1) {
+                Icon(Icons.Outlined.Remove, "Remove event day")
+            }
+            Text(ui.eventDays.toString())
+            IconButton({ dispatch(VentAction.SetEventDays(ui.eventDays + 1)) }, enabled = ui.eventDays < MAX_EVENT_DAYS) {
+                Icon(Icons.Outlined.Add, "Add event day")
+            }
+        }
+        ui.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        val rowColors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        ListItem(headlineContent = { Text("Allow attendee seat changes") }, trailingContent = {
+            Switch(ui.seatSelectionOpen, { dispatch(VentAction.SetSeatSelectionOpen(it)) })
+        }, colors = rowColors)
         ListItem(headlineContent = { Text(ui.session.room) }, overlineContent = { Text("Venue") },
-            leadingContent = { Icon(Icons.Outlined.LocationOn, null) })
+            leadingContent = { Icon(Icons.Outlined.LocationOn, null) }, colors = rowColors)
     }
     Image(painterResource(Res.drawable.auditorium), "Auditorium", Modifier.fillMaxWidth().height(space.heroIcon * 2)
         .clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
@@ -302,7 +323,7 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onA
                 val swatch = argb?.let { Color(it) } ?: app.vent.ui.theme.VentDarkColors.primary
                 FilterChip(
                     selected = scheme.primary == swatch,
-                    onClick = { onAccentChange(argb) },
+                    onClick = { dispatch(VentAction.SetEventAccent(argb)) },
                     label = { Text(name) },
                     leadingIcon = { Surface(Modifier.size(space.md), shape = MaterialTheme.shapes.extraLarge, color = swatch) {} },
                 )
@@ -325,6 +346,7 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onA
     OutlinedButton({ dispatch(VentAction.Navigate(VentScreen.SCHEDULE)) }, Modifier.fillMaxWidth()) {
         Text("Preview Attendee Schedule")
     }
+    if (onSignOut != null) TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Sign out") }
 }
 
 @Composable

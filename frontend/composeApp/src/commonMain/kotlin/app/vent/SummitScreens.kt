@@ -128,6 +128,8 @@ private class ExpiredViewModel : PanelModel()
     val state by model.uiState.collectAsState()
     val space = MaterialTheme.spacing
     fun go(target: VentScreen) = dispatch(VentAction.Navigate(target))
+    val showQuestAction = screen == VentScreen.QUESTS && ui.role == DemoRole.ORGANIZER
+    var createQuest by rememberSaveable { mutableStateOf(false) }
     val title = staffScreens[screen] ?: when (screen) {
         VentScreen.SCHEDULE -> "Sessions"
         VentScreen.QUESTS -> "Quests"
@@ -136,12 +138,14 @@ private class ExpiredViewModel : PanelModel()
         else -> "Attendee verification"
     }
     Page(title) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(space.lg),
+        Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(space.lg)
+            .padding(bottom = if (showQuestAction) space.heroIcon else space.none),
             verticalArrangement = Arrangement.spacedBy(space.md)) {
             if (screen in staffScreens) {
                 Text("Live operations · Demo console", style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                    staffScreens.forEach { (destination, label) ->
+                    staffScreens.filterKeys { it != VentScreen.DOOR }.forEach { (destination, label) ->
                         FilterChip(screen == destination, { go(destination) }, { Text(label) })
                     }
                 }
@@ -156,7 +160,9 @@ private class ExpiredViewModel : PanelModel()
                     if (state.choice == "Day 2") Summary("Day 2", "Schedule pending", "Sessions will appear here when published.")
                     else {
                         Summary("Happening now · Stage 1", "The AI-Native Enterprise Architecture", "10:00–11:15 AM · Auditorium A · Seat " + ui.confirmedSeat)
-                        Button({ go(if (ui.role == DemoRole.ATTENDEE) VentScreen.SCANNER else VentScreen.DOOR) }) { Text("Open check-in") }
+                        if (ui.role == DemoRole.ATTENDEE) {
+                            Button({ go(VentScreen.SCANNER) }) { Text("Open check-in") }
+                        }
                         Text("Upcoming today", style = MaterialTheme.typography.titleLarge)
                         Summary("11:30 AM · Hall B", "Zero-Trust Infrastructure for Multi-Agent AI", "Security & operations")
                         Summary("1:30 PM · Auditorium A", "Autonomous Data Pipelines at Scale", "Data platforms · Open seating")
@@ -165,7 +171,6 @@ private class ExpiredViewModel : PanelModel()
                     OutlinedButton({ go(VentScreen.SEAT) }) { Text("Open seat navigator") }
                 }
                 VentScreen.QUESTS -> {
-                    var createQuest by rememberSaveable { mutableStateOf(false) }
                     val responses = ui.questResponses[email].orEmpty()
                     if (ui.role == DemoRole.ATTENDEE) {
                     val earned = ui.questDefinitions.filter { it.title in responses }.sumOf { it.points }
@@ -196,13 +201,6 @@ private class ExpiredViewModel : PanelModel()
                         }
                     }
                     ui.message?.let { Text(it) }
-                    if (ui.role == DemoRole.ORGANIZER) {
-                        Button({ createQuest = true }) { Text("Create quest") }
-                        if (createQuest) CreateQuestDialog({ createQuest = false }) {
-                            dispatch(VentAction.PublishQuest(it))
-                            createQuest = false
-                        }
-                    }
                 }
                 VentScreen.WRAPPED -> {
                     Text("Your 2025 summit journey", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelLarge)
@@ -233,14 +231,6 @@ private class ExpiredViewModel : PanelModel()
                     OutlinedButton({ go(VentScreen.PROFILE) }) { Text("View summit pass") }
                 }
                 VentScreen.PROFILE -> {
-                    if (ui.role == DemoRole.ORGANIZER) {
-                        Summary("Organizer settings", ui.eventTitle, email)
-                        OutlinedButton({ go(VentScreen.SETUP) }, Modifier.fillMaxWidth()) { Text("Event setup") }
-                        OutlinedButton({ go(VentScreen.PEOPLE) }, Modifier.fillMaxWidth()) { Text("Manage attendees") }
-                        ListItem(headlineContent = { Text("Allow attendee seat changes") }, trailingContent = {
-                            Switch(ui.seatSelectionOpen, { dispatch(VentAction.SetSeatSelectionOpen(it)) })
-                        })
-                    } else {
                     Card {
                         Column(Modifier.fillMaxWidth().padding(space.xl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(space.md)) {
                             Portrait()
@@ -262,7 +252,8 @@ private class ExpiredViewModel : PanelModel()
                     Card(onClick = { showPreferences = true }, modifier = Modifier.fillMaxWidth()) {
                         ListItem(headlineContent = { Text("Conference preferences") },
                             supportingContent = { Text("Badge sharing, leaderboard visibility, and reminders") },
-                            trailingContent = { Icon(Icons.Outlined.ChevronRight, null) })
+                            trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
+                            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent))
                     }
                     if (showPreferences) AlertDialog(
                         onDismissRequest = { showPreferences = false },
@@ -280,9 +271,9 @@ private class ExpiredViewModel : PanelModel()
                         } },
                         confirmButton = { TextButton({ showPreferences = false }) { Text("Done") } },
                     )
-                    }
                     Card(onClick = signOut, modifier = Modifier.fillMaxWidth()) {
-                        ListItem(headlineContent = { Text("Sign out") }, leadingContent = { Icon(Icons.Outlined.Logout, null) })
+                        ListItem(headlineContent = { Text("Sign out") }, leadingContent = { Icon(Icons.Outlined.Logout, null) },
+                            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent))
                     }
                 }
                 VentScreen.PROJECTOR -> {
@@ -308,6 +299,18 @@ private class ExpiredViewModel : PanelModel()
                     }
                 }
             }
+        }
+        if (showQuestAction) {
+            FloatingActionButton({ createQuest = true }, Modifier.align(Alignment.BottomEnd).padding(space.lg)) {
+                Icon(Icons.Outlined.Add, "Add quest")
+            }
+        }
+        }
+    }
+    if (createQuest && showQuestAction) {
+        CreateQuestDialog({ createQuest = false }) {
+            dispatch(VentAction.PublishQuest(it))
+            createQuest = false
         }
     }
 }

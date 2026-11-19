@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import app.vent.ui.theme.spacing
 
 @Composable
-internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creating: Boolean = false, save: (SessionDetails) -> Unit) {
+internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creating: Boolean = false, eventDays: Int = 2, save: (SessionDetails) -> Unit) {
     var title by rememberSaveable { mutableStateOf(initial.title) }
     var time by rememberSaveable { mutableStateOf(initial.time) }
     var hall by rememberSaveable { mutableStateOf(initial.room) }
@@ -31,8 +31,8 @@ internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creat
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
                 OutlinedTextField(title, { title = it.take(160) }, label = { Text("Session title") }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-                    (1..2).forEach { option -> FilterChip(day == option, { day = option }, { Text("Day $option") }) }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                    (1..eventDays).forEach { option -> FilterChip(day == option, { day = option }, { Text("Day $option") }) }
                 }
                 val times = time.split(Regex("\\s*[–—]\\s*|\\s+-\\s+"), limit = 2)
                 val start = times.getOrElse(0) { "" }

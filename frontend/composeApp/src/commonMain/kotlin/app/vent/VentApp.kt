@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -100,8 +99,7 @@ data class NavItem(val screen: VentScreen, val label: String, val icon: ImageVec
 
 @Composable
 fun VentApp(allowLocalOrganizer: Boolean = false) {
-    var accent by rememberSaveable { mutableStateOf<Int?>(null) }
-    VentTheme(accent = accent?.let { androidx.compose.ui.graphics.Color(it) }) {
+    VentTheme {
         val localStore = rememberVentLocalStore()
         val authViewModel = viewModel { AuthViewModel(createVentApi(), localStore, allowLocalOrganizer) }
         val api = authViewModel.api
@@ -147,7 +145,9 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             NavItem(VentScreen.PROFILE, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
         )
         val items = if (uiState.role == DemoRole.ATTENDEE) attendeeItems else organizerItems
-        val inOperations = uiState.screen in organizerOperationTabs
+        val inOperations = uiState.role == DemoRole.ORGANIZER &&
+            uiState.screen in setOf(VentScreen.DOOR, VentScreen.OCCUPANCY, VentScreen.CONTROLS)
+        VentTheme(accent = uiState.eventAccent?.let { androidx.compose.ui.graphics.Color(it) }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 720.dp
             if (expanded) {
@@ -155,7 +155,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
                     if (!inOperations) VentRail(items,uiState.screen,{onAction(VentAction.Navigate(it))},uiState.role)
                     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surface) {
                         Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter){
-                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true,authState.email,authViewModel::signOut) { accent = it }}
+                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true,authState.email,authViewModel::signOut)}
                         }
                     }
                 }
@@ -166,16 +166,18 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
                         if (uiState.role == DemoRole.ATTENDEE && uiState.screen != VentScreen.SCANNER) {
                             CheckInBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
                         } else if (!inOperations && uiState.screen != VentScreen.SCANNER) {
-                            VentBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
+                            val selected = if (uiState.screen == VentScreen.SETUP) VentScreen.PROFILE else uiState.screen
+                            VentBottomBar(items, selected) { onAction(VentAction.Navigate(it)) }
                         }
                     },
-                ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) { accent = it } } }
+                ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
             }
+        }
         }
     }
 }
 
-@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit,onAccentChange:(Int?)->Unit){
+@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit){
     val target = uiState.screen.toRoute()
     val backStack = rememberNavBackStack(ventNavigationConfig, target)
     BindBrowserNavigation(backStack)
@@ -203,7 +205,11 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             entry<ScheduleRoute> { SessionsHome(uiState, onAction) }
             entry<SeatRoute> { SeatSelectionScreen(uiState,onAction) }
             entry<QuestsRoute> { SummitScreen(VentScreen.QUESTS, uiState, onAction, email) }
-            entry<ProfileRoute> { SummitScreen(VentScreen.PROFILE, uiState, onAction, email, onSignOut) }
+            entry<ProfileRoute> {
+                if (uiState.role == DemoRole.ORGANIZER) {
+                    OrganizerOperations(VentScreen.SETUP, uiState, onAction, onSignOut)
+                } else SummitScreen(VentScreen.PROFILE, uiState, onAction, email, onSignOut)
+            }
             entry<OrganizerRoute> { OrganizerDashboard(uiState, expanded, onAction) }
             entry<PeopleRoute> { AttendeeImportScreen(uiState.attendees, onAction) }
             entry<ScannerRoute> { ScanEntry(uiState, onAction) }
@@ -211,7 +217,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             entry<DoorRoute> { OrganizerOperations(VentScreen.DOOR, uiState, onAction) }
             entry<OccupancyRoute> { OrganizerOperations(VentScreen.OCCUPANCY, uiState, onAction) }
             entry<ControlsRoute> { OrganizerOperations(VentScreen.CONTROLS, uiState, onAction) }
-            entry<SetupRoute> { OrganizerOperations(VentScreen.SETUP, uiState, onAction, onAccentChange) }
+            entry<SetupRoute> { OrganizerOperations(VentScreen.SETUP, uiState, onAction, onSignOut) }
             entry<ProjectorRoute> {
                 if (expanded) SummitScreen(VentScreen.PROJECTOR, uiState, onAction)
                 else LaunchedEffect(Unit) { onAction(VentAction.Navigate(VentScreen.ORGANIZER)) }
@@ -333,9 +339,6 @@ internal fun Modifier.conferencePattern(): Modifier {
 @Composable
 private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (VentAction) -> Unit) {
     val space = MaterialTheme.spacing
-    var showAdd by remember { mutableStateOf(false) }
-    var createQuest by remember { mutableStateOf(false) }
-    var createSession by remember { mutableStateOf(false) }
     fun open(screen: VentScreen) = dispatch(VentAction.Navigate(screen))
     Box(Modifier.fillMaxSize()) {
         Page(ui.eventTitle) {
@@ -347,7 +350,7 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
                 item { Text("Live operations", style = MaterialTheme.typography.titleLarge) }
                 val links = listOf(
                     Triple(VentScreen.SCHEDULE, "Sessions and seating", "Review session details and manage seat layouts"),
-                    Triple(VentScreen.DOOR, "Door scan", "Open the check-in desk"),
+                    Triple(VentScreen.PEOPLE, "Manage attendees", "Add attendees or upload a CSV"),
                     Triple(VentScreen.OCCUPANCY, "Occupancy", "Review room status"),
                     Triple(VentScreen.CONTROLS, "Live controls", "Manage session operations"),
                 ) + if (expanded) listOf(Triple(VentScreen.PROJECTOR, "Projector", "Open the stage display")) else emptyList()
@@ -361,25 +364,8 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
                         )
                     }
                 }
-                item { Spacer(Modifier.height(space.heroIcon)) }
             }
         }
-        Box(Modifier.align(Alignment.BottomEnd).padding(space.lg)) {
-            FloatingActionButton({ showAdd = true }) { Icon(Icons.Outlined.Add, "Open organizer actions") }
-            DropdownMenu(showAdd, { showAdd = false }) {
-                DropdownMenuItem(text = { Text("Create session") }, onClick = { showAdd = false; createSession = true })
-                DropdownMenuItem(text = { Text("Create quest") }, onClick = { showAdd = false; createQuest = true })
-                DropdownMenuItem(text = { Text("Edit sessions") }, onClick = { showAdd = false; open(VentScreen.SCHEDULE) })
-            }
-        }
-    }
-    if (createQuest) CreateQuestDialog({ createQuest = false }) {
-        dispatch(VentAction.PublishQuest(it))
-        createQuest = false
-    }
-    if (createSession) EditSessionDialog(SessionDetails("", "", "", ""), { createSession = false }, creating = true) {
-        dispatch(VentAction.CreateSession(it))
-        createSession = false
     }
 }
 @Composable private fun Metric(value:String,label:String,modifier:Modifier=Modifier){Surface(modifier,shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer){Column(Modifier.padding(20.dp)){Text(value,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSecondaryContainer);Text(label,color=MaterialTheme.colorScheme.onSecondaryContainer)}}}
