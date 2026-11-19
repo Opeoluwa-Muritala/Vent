@@ -96,7 +96,8 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
     Column(modifier, verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(uiState.session.room, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(uiState.sessionDetails[uiState.session]?.room ?: uiState.session.room,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (uiState.role == DemoRole.ORGANIZER) {
                         "${uiState.venueRows.sumOf { it.seats.size }} seats · ${uiState.seatLayoutMode.name.lowercase()} layout"
@@ -176,6 +177,12 @@ private fun SectionLabel(text: String, vip: Boolean) {
 private fun SeatRow(row: VenueRow, uiState: VentUiState, onSeatClick: (String) -> Unit) {
     val displayLetter = ('A'.code + uiState.venueRows.indexOf(row)).toChar().toString()
     val midpoint = row.seats.size / 2
+    val assignedSeats = uiState.seatAssignments[uiState.session].orEmpty().values.toSet()
+    val seats = row.seats.map { seat ->
+        if (seat.label in assignedSeats && seat.availability != SeatAvailability.BLOCKED) {
+            seat.copy(availability = SeatAvailability.BOOKED)
+        } else seat
+    }
     val curved = uiState.seatLayoutMode == SeatLayoutMode.CURVED
     val density = LocalDensity.current
     val curveStep = with(density) { MaterialTheme.spacing.sm.toPx() }
@@ -184,11 +191,11 @@ private fun SeatRow(row: VenueRow, uiState: VentUiState, onSeatClick: (String) -
         verticalAlignment = Alignment.Top,
     ) {
         Text(displayLetter, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(MaterialTheme.spacing.touch).padding(top = MaterialTheme.spacing.lg))
-        row.seats.take(midpoint).forEachIndexed { index, seat ->
+        seats.take(midpoint).forEachIndexed { index, seat ->
             SeatControl(seat, uiState, onSeatClick, curvedSeatModifier(index, midpoint, curved, curveStep))
         }
         Spacer(Modifier.width(MaterialTheme.spacing.touch))
-        row.seats.drop(midpoint).forEachIndexed { index, seat ->
+        seats.drop(midpoint).forEachIndexed { index, seat ->
             SeatControl(seat, uiState, onSeatClick, curvedSeatModifier(index + midpoint, midpoint, curved, curveStep))
         }
         Text(displayLetter, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(MaterialTheme.spacing.touch).padding(top = MaterialTheme.spacing.lg))

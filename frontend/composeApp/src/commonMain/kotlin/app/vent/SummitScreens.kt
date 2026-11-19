@@ -46,10 +46,6 @@ private class ScheduleViewModel : PanelModel()
 private class QuestsViewModel : PanelModel()
 private class ProfileViewModel : PanelModel()
 private class WrappedViewModel : PanelModel()
-private class DoorViewModel : PanelModel()
-private class OccupancyViewModel : PanelModel()
-private class ControlsViewModel : PanelModel()
-private class SetupViewModel : PanelModel()
 private class ProjectorViewModel : PanelModel()
 private class ConfirmedViewModel : PanelModel()
 private class DuplicateViewModel : PanelModel()
@@ -61,10 +57,6 @@ private class ExpiredViewModel : PanelModel()
     VentScreen.QUESTS -> viewModel<QuestsViewModel> { QuestsViewModel() }
     VentScreen.PROFILE -> viewModel<ProfileViewModel> { ProfileViewModel() }
     VentScreen.WRAPPED -> viewModel<WrappedViewModel> { WrappedViewModel() }
-    VentScreen.DOOR -> viewModel<DoorViewModel> { DoorViewModel() }
-    VentScreen.OCCUPANCY -> viewModel<OccupancyViewModel> { OccupancyViewModel() }
-    VentScreen.CONTROLS -> viewModel<ControlsViewModel> { ControlsViewModel() }
-    VentScreen.SETUP -> viewModel<SetupViewModel> { SetupViewModel() }
     VentScreen.PROJECTOR -> viewModel<ProjectorViewModel> { ProjectorViewModel() }
     VentScreen.CONFIRMED -> viewModel<ConfirmedViewModel> { ConfirmedViewModel() }
     VentScreen.DUPLICATE -> viewModel<DuplicateViewModel> { DuplicateViewModel() }
@@ -108,7 +100,14 @@ private class ExpiredViewModel : PanelModel()
         }
         Text(ui.session.title)
         if (state.choice == "manual") Spacer(Modifier.weight(1f))
-        else CheckInCamera(Modifier.fillMaxWidth().weight(1f), ::submit)
+        else Surface(
+            modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = spacing.compactBreakpoint)
+                .fillMaxWidth().weight(1f),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            CheckInCamera(Modifier.fillMaxSize(), ::submit)
+        }
         OutlinedButton({ model.onIntent(PanelIntent.Choose("manual")) }, Modifier.fillMaxWidth()) {
             Text("Enter code manually")
         }
@@ -236,7 +235,8 @@ private class ExpiredViewModel : PanelModel()
                 VentScreen.PROFILE -> {
                     if (ui.role == DemoRole.ORGANIZER) {
                         Summary("Organizer settings", ui.eventTitle, email)
-                        OutlinedButton({ go(VentScreen.SETUP) }, Modifier.fillMaxWidth()) { Text("Edit event settings") }
+                        OutlinedButton({ go(VentScreen.SETUP) }, Modifier.fillMaxWidth()) { Text("Event setup") }
+                        OutlinedButton({ go(VentScreen.PEOPLE) }, Modifier.fillMaxWidth()) { Text("Manage attendees") }
                         ListItem(headlineContent = { Text("Allow attendee seat changes") }, trailingContent = {
                             Switch(ui.seatSelectionOpen, { dispatch(VentAction.SetSeatSelectionOpen(it)) })
                         })
@@ -285,34 +285,6 @@ private class ExpiredViewModel : PanelModel()
                         ListItem(headlineContent = { Text("Sign out") }, leadingContent = { Icon(Icons.Outlined.Logout, null) })
                     }
                 }
-                VentScreen.DOOR -> {
-                    Summary("Current gate", ui.activeGate, "Main Keynote Hall A · Local demo")
-                    Row { listOf("West Door 2", "East Door 1").forEach { TextButton({ dispatch(VentAction.SelectGate(it)) }) { Text(it) } } }
-                    Summary("Door scans", "${342 + if (ui.isCheckedIn) 1 else 0} admitted", "Recent verification results")
-                    listOf("Valid admission", "Already checked in", "Wrong session").forEach { ListItem(headlineContent = { Text(it) }) }
-                }
-                VentScreen.OCCUPANCY -> {
-                    Summary("Live hall overview", "${342 + if (ui.isCheckedIn) 1 else 0} of 480 seats occupied", ui.eventTitle)
-                    listOf("Keynote hall" to .85f, "Zero-Trust hall" to .92f, "Workshop hall" to .64f).forEach { (hall, ratio) ->
-                        Text(hall + " · " + (ratio * 100).toInt() + "%"); LinearProgressIndicator({ ratio }, Modifier.fillMaxWidth())
-                    }
-                    Summary("Anomaly detection", "Rapid duplicate check-in", "Three badges recorded at East Door 1 within 45 seconds.")
-                    OutlinedButton({ go(VentScreen.SEAT) }) { Text("Review seat collision") }
-                }
-                VentScreen.CONTROLS -> {
-                    Summary("Stage 1 · Audience poll", "Which engineering priority will have the highest impact?", "342 responses · Question 2 of 3")
-                    listOf("Agentic workflows" to .42f, "On-device models" to .28f, "Zero-trust infrastructure" to .18f, "Developer tooling" to .12f).forEach { (label, share) ->
-                        Text(label + " · " + (share * 100).toInt() + "%"); LinearProgressIndicator({ share }, Modifier.fillMaxWidth())
-                    }
-                    Button({ dispatch(VentAction.TogglePoll) }) { Text(if (ui.pollPaused) "Resume poll" else "Pause poll") }
-                }
-                VentScreen.SETUP -> {
-                    Text("Event configuration", style = MaterialTheme.typography.headlineSmall)
-                    OutlinedTextField(state.input, { model.onIntent(PanelIntent.Edit(it)) }, label = { Text("Event title") }, placeholder = { Text("Vent Demo Day") })
-                    Summary("Theme preview", state.input.ifBlank { "Vent Demo Day" }, "Slate · Main keynote hall")
-                    Button({ dispatch(VentAction.RenameEvent(state.input)) }, enabled = state.input.isNotBlank()) { Text("Save event configuration") }
-                    Text("Current event: " + ui.eventTitle)
-                }
                 VentScreen.PROJECTOR -> {
                     Text(ui.eventTitle + " · Hall A", style = MaterialTheme.typography.labelLarge)
                     Text(if (ui.pollPaused) "Audience poll paused" else "Audience poll open")
@@ -341,7 +313,8 @@ private class ExpiredViewModel : PanelModel()
 }
 
 @Composable private fun Portrait() {
-    Image(painterResource(Res.drawable.pass_portrait), null, Modifier.size(MaterialTheme.spacing.heroIcon).clip(CircleShape))
+    Image(painterResource(Res.drawable.pass_portrait), null, Modifier.size(MaterialTheme.spacing.heroIcon).clip(CircleShape),
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
 }
 
 @Composable private fun Tile(icon: ImageVector, label: String, value: String, modifier: Modifier) {

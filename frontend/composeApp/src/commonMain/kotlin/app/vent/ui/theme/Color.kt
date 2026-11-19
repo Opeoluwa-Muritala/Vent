@@ -6,13 +6,14 @@ import androidx.compose.ui.graphics.Color
 
 internal val SessionHeaderBackground = Color(0xFF10383A)
 internal val SessionHeaderForeground = Color(0xFFFFFFFF)
+private val LightTeal = Color(0xFFA0CFD0)
 
 internal val VentLightColors = lightColorScheme(
-    primary = Color(0xFF436833),
+    primary = SessionHeaderBackground,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFC3EFAD),
-    onPrimaryContainer = Color(0xFF2C4F1E),
-    inversePrimary = Color(0xFFA8D293),
+    primaryContainer = Color(0xFFBBEBED),
+    onPrimaryContainer = SessionHeaderBackground,
+    inversePrimary = LightTeal,
     secondary = Color(0xFF55624C),
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFD8E7CB),
@@ -27,7 +28,7 @@ internal val VentLightColors = lightColorScheme(
     onSurface = Color(0xFF191D17),
     surfaceVariant = Color(0xFFE5E3D1),
     onSurfaceVariant = Color(0xFF48473A),
-    surfaceTint = Color(0xFF436833),
+    surfaceTint = SessionHeaderBackground,
     inverseSurface = Color(0xFF2E312B),
     inverseOnSurface = Color(0xFFEFF2E8),
     surfaceContainerLowest = Color(0xFFFFFFFF),
@@ -47,11 +48,11 @@ internal val VentLightColors = lightColorScheme(
 )
 
 internal val VentDarkColors = darkColorScheme(
-    primary = Color(0xFFA8D293),
-    onPrimary = Color(0xFF153808),
-    primaryContainer = Color(0xFF2C4F1E),
-    onPrimaryContainer = Color(0xFFC3EFAD),
-    inversePrimary = Color(0xFF436833),
+    primary = LightTeal,
+    onPrimary = SessionHeaderBackground,
+    primaryContainer = SessionHeaderBackground,
+    onPrimaryContainer = Color(0xFFBBEBED),
+    inversePrimary = SessionHeaderBackground,
     secondary = Color(0xFFBCCBB0),
     onSecondary = Color(0xFF273421),
     secondaryContainer = Color(0xFF3D4B36),
@@ -66,7 +67,7 @@ internal val VentDarkColors = darkColorScheme(
     onSurface = Color(0xFFE1E4DA),
     surfaceVariant = Color(0xFF48473A),
     onSurfaceVariant = Color(0xFFC9C7B6),
-    surfaceTint = Color(0xFFA8D293),
+    surfaceTint = LightTeal,
     inverseSurface = Color(0xFFE1E4DA),
     inverseOnSurface = Color(0xFF2E312B),
     surfaceContainerLowest = Color(0xFF0C0F0A),

@@ -23,9 +23,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -41,9 +43,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.serialization.Serializable
@@ -96,11 +96,12 @@ private val ventNavigationConfig = SavedStateConfiguration {
     }
 }
 
-data class NavItem(val screen: VentScreen, val label: String, val icon: ImageVector)
+data class NavItem(val screen: VentScreen, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
 
 @Composable
 fun VentApp(allowLocalOrganizer: Boolean = false) {
-    VentTheme {
+    var accent by rememberSaveable { mutableStateOf<Int?>(null) }
+    VentTheme(accent = accent?.let { androidx.compose.ui.graphics.Color(it) }) {
         val localStore = rememberVentLocalStore()
         val authViewModel = viewModel { AuthViewModel(createVentApi(), localStore, allowLocalOrganizer) }
         val api = authViewModel.api
@@ -134,27 +135,27 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
         val uiState by ventViewModel.uiState.collectAsState()
         val onAction = ventViewModel::onAction
         val attendeeItems = listOf(
-            NavItem(VentScreen.SCHEDULE,"Sessions",Icons.Outlined.CalendarMonth),
-            NavItem(VentScreen.SEAT,"Seat Map",Icons.Outlined.Chair),
-            NavItem(VentScreen.QUESTS,"Quests",Icons.Outlined.EmojiEvents),
-            NavItem(VentScreen.PROFILE,"Summit Pass",Icons.Outlined.Badge),
+            NavItem(VentScreen.SCHEDULE, "Sessions", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
+            NavItem(VentScreen.SEAT, "Seat Map", Icons.Outlined.Chair, Icons.Filled.Chair),
+            NavItem(VentScreen.QUESTS, "Quests", Icons.Outlined.EmojiEvents, Icons.Filled.EmojiEvents),
+            NavItem(VentScreen.PROFILE, "Summit Pass", Icons.Outlined.Badge, Icons.Filled.Badge),
         )
         val organizerItems = listOf(
-            NavItem(VentScreen.ORGANIZER,"Events",Icons.Outlined.Event),
-            NavItem(VentScreen.SCHEDULE,"Sessions",Icons.Outlined.ViewTimeline),
-            NavItem(VentScreen.PEOPLE,"People",Icons.Outlined.Group),
-            NavItem(VentScreen.QUESTS,"Quests",Icons.Outlined.EmojiEvents),
-            NavItem(VentScreen.PROFILE,"Settings",Icons.Outlined.Settings),
+            NavItem(VentScreen.ORGANIZER, "Events", Icons.Outlined.Event, Icons.Filled.Event),
+            NavItem(VentScreen.SCHEDULE, "Sessions", Icons.Outlined.ViewTimeline, Icons.Filled.ViewTimeline),
+            NavItem(VentScreen.QUESTS, "Quests", Icons.Outlined.EmojiEvents, Icons.Filled.EmojiEvents),
+            NavItem(VentScreen.PROFILE, "Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
         )
         val items = if (uiState.role == DemoRole.ATTENDEE) attendeeItems else organizerItems
+        val inOperations = uiState.screen in organizerOperationTabs
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 720.dp
             if (expanded) {
                 Row(Modifier.fillMaxSize()) {
-                    VentRail(items,uiState.screen,{onAction(VentAction.Navigate(it))},uiState.role)
+                    if (!inOperations) VentRail(items,uiState.screen,{onAction(VentAction.Navigate(it))},uiState.role)
                     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surface) {
                         Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter){
-                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true,authState.email,authViewModel::signOut)}
+                            Box(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max=1200.dp)){VentSurface(uiState,onAction,true,authState.email,authViewModel::signOut) { accent = it }}
                         }
                     }
                 }
@@ -164,17 +165,17 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
                     bottomBar = {
                         if (uiState.role == DemoRole.ATTENDEE && uiState.screen != VentScreen.SCANNER) {
                             CheckInBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
-                        } else if (uiState.screen != VentScreen.SCANNER) {
+                        } else if (!inOperations && uiState.screen != VentScreen.SCANNER) {
                             VentBottomBar(items, uiState.screen) { onAction(VentAction.Navigate(it)) }
                         }
                     },
-                ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
+                ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) { accent = it } } }
             }
         }
     }
 }
 
-@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit){
+@Composable private fun VentSurface(uiState:VentUiState,onAction:(VentAction)->Unit,expanded:Boolean,email:String,onSignOut:()->Unit,onAccentChange:(Int?)->Unit){
     val target = uiState.screen.toRoute()
     val backStack = rememberNavBackStack(ventNavigationConfig, target)
     BindBrowserNavigation(backStack)
@@ -207,10 +208,10 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             entry<PeopleRoute> { AttendeeImportScreen(uiState.attendees, onAction) }
             entry<ScannerRoute> { ScanEntry(uiState, onAction) }
             entry<WrappedRoute> { SummitScreen(VentScreen.WRAPPED, uiState, onAction) }
-            entry<DoorRoute> { SummitScreen(VentScreen.DOOR, uiState, onAction) }
-            entry<OccupancyRoute> { SummitScreen(VentScreen.OCCUPANCY, uiState, onAction) }
-            entry<ControlsRoute> { SummitScreen(VentScreen.CONTROLS, uiState, onAction) }
-            entry<SetupRoute> { SummitScreen(VentScreen.SETUP, uiState, onAction) }
+            entry<DoorRoute> { OrganizerOperations(VentScreen.DOOR, uiState, onAction) }
+            entry<OccupancyRoute> { OrganizerOperations(VentScreen.OCCUPANCY, uiState, onAction) }
+            entry<ControlsRoute> { OrganizerOperations(VentScreen.CONTROLS, uiState, onAction) }
+            entry<SetupRoute> { OrganizerOperations(VentScreen.SETUP, uiState, onAction, onAccentChange) }
             entry<ProjectorRoute> {
                 if (expanded) SummitScreen(VentScreen.PROJECTOR, uiState, onAction)
                 else LaunchedEffect(Unit) { onAction(VentAction.Navigate(VentScreen.ORGANIZER)) }
@@ -297,12 +298,10 @@ private fun CheckInBottomBar(items: List<NavItem>, selected: VentScreen, navigat
                 NavigationBarItem(
                     selected = selected == item.screen,
                     onClick = { navigate(item.screen) },
-                    icon = { Icon(item.icon, null) },
-                    label = { Text(item.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    icon = { Icon(if (selected == item.screen) item.selectedIcon else item.icon, item.label) },
                     colors = NavigationBarItemDefaults.colors(
                         indicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                         selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 )
             }
@@ -348,11 +347,9 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
                 item { Text("Live operations", style = MaterialTheme.typography.titleLarge) }
                 val links = listOf(
                     Triple(VentScreen.SCHEDULE, "Sessions and seating", "Review session details and manage seat layouts"),
-                    Triple(VentScreen.PEOPLE, "Attendees", "Add attendees or upload a CSV"),
                     Triple(VentScreen.DOOR, "Door scan", "Open the check-in desk"),
                     Triple(VentScreen.OCCUPANCY, "Occupancy", "Review room status"),
                     Triple(VentScreen.CONTROLS, "Live controls", "Manage session operations"),
-                    Triple(VentScreen.SETUP, "Event setup", "Edit event configuration"),
                 ) + if (expanded) listOf(Triple(VentScreen.PROJECTOR, "Projector", "Open the stage display")) else emptyList()
                 items(links, key = { it.first.name }) { (screen, title, detail) ->
                     Card(onClick = { open(screen) }, modifier = Modifier.fillMaxWidth()) {
@@ -373,7 +370,6 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
                 DropdownMenuItem(text = { Text("Create session") }, onClick = { showAdd = false; createSession = true })
                 DropdownMenuItem(text = { Text("Create quest") }, onClick = { showAdd = false; createQuest = true })
                 DropdownMenuItem(text = { Text("Edit sessions") }, onClick = { showAdd = false; open(VentScreen.SCHEDULE) })
-                DropdownMenuItem(text = { Text("Add attendees") }, onClick = { showAdd = false; open(VentScreen.PEOPLE) })
             }
         }
     }
@@ -389,6 +385,21 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
 @Composable private fun Metric(value:String,label:String,modifier:Modifier=Modifier){Surface(modifier,shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer){Column(Modifier.padding(20.dp)){Text(value,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSecondaryContainer);Text(label,color=MaterialTheme.colorScheme.onSecondaryContainer)}}}
 
 @Composable private fun SectionTitle(title:String,trailing:String){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(title,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f));Text(trailing,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)}}
-@Composable private fun VentBottomBar(items:List<NavItem>,selected:VentScreen,onSelect:(VentScreen)->Unit){NavigationBar(containerColor=MaterialTheme.colorScheme.surfaceContainerHighest){items.forEach{item->NavigationBarItem(selected=selected==item.screen,onClick={onSelect(item.screen)},icon={Icon(item.icon,item.label)},label={Text(item.label,maxLines=1,overflow=TextOverflow.Ellipsis)},colors=NavigationBarItemDefaults.colors(indicatorColor=androidx.compose.ui.graphics.Color.Transparent,selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.onSurfaceVariant))}}}
-@Composable private fun VentRail(items:List<NavItem>,selected:VentScreen,onSelect:(VentScreen)->Unit,role:DemoRole){NavigationRail(header={Column(horizontalAlignment=Alignment.CenterHorizontally){Spacer(Modifier.height(18.dp));Surface(Modifier.size(44.dp),shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.primary){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("V",color=MaterialTheme.colorScheme.onPrimary,fontWeight=FontWeight.Bold,fontSize=22.sp)}};Spacer(Modifier.height(22.dp))}}){items.forEach{item->NavigationRailItem(selected=selected==item.screen,onClick={onSelect(item.screen)},icon={Icon(item.icon,item.label)},label={Text(item.label)})};Spacer(Modifier.weight(1f));Text(if(role==DemoRole.ORGANIZER)"Organizer" else "Attendee",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.height(18.dp))}}
+@Composable
+private fun VentBottomBar(items: List<NavItem>, selected: VentScreen, onSelect: (VentScreen) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest) {
+        items.forEach { item ->
+            NavigationBarItem(
+                selected = selected == item.screen,
+                onClick = { onSelect(item.screen) },
+                icon = { Icon(if (selected == item.screen) item.selectedIcon else item.icon, item.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                ),
+            )
+        }
+    }
+}
+@Composable private fun VentRail(items:List<NavItem>,selected:VentScreen,onSelect:(VentScreen)->Unit,role:DemoRole){NavigationRail(header={Column(horizontalAlignment=Alignment.CenterHorizontally){Spacer(Modifier.height(18.dp));VentMark(MaterialTheme.colorScheme.primary, Modifier.size(MaterialTheme.spacing.touch));Spacer(Modifier.height(22.dp))}}){items.forEach{item->NavigationRailItem(selected=selected==item.screen,onClick={onSelect(item.screen)},icon={Icon(item.icon,item.label)},label={Text(item.label)})};Spacer(Modifier.weight(1f));Text(if(role==DemoRole.ORGANIZER)"Organizer" else "Attendee",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.height(18.dp))}}
 

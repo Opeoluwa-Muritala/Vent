@@ -1,6 +1,7 @@
 package app.vent
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -24,6 +26,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vent.api.EventDto
+import app.vent.composeapp.generated.resources.Res
+import app.vent.composeapp.generated.resources.event_poster_wall
 import app.vent.data.VentApi
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 enum class AuthStep { EMAIL, CODE, EVENT_PICKER, AUTHENTICATED }
@@ -160,31 +165,43 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
 
 @Composable private fun EmailScreen(state: AuthUiState, onEmail: (String) -> Unit, onSubmit: () -> Unit) {
     val spacing = MaterialTheme.spacing
-    val logoInk = MaterialTheme.colorScheme.onPrimary
+    val logoInk = app.vent.ui.theme.SessionHeaderForeground
     Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).safeDrawingPadding().imePadding(),
-        contentAlignment = Alignment.Center,
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
     ) {
-        Column(
-            Modifier.padding(spacing.lg).widthIn(max = spacing.compactBreakpoint).fillMaxWidth()
-                .verticalScroll(rememberScrollState()).padding(spacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(spacing.md),
-        ) {
-            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary) {
-                androidx.compose.foundation.Canvas(Modifier.size(spacing.heroIcon).semantics { contentDescription = "Vent" }) {
-                    val stroke = size.width * .10f
-                    val point = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
-                    drawLine(logoInk, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), point, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-                    drawLine(logoInk, point, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-                }
-            }
-            OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
-                leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
-                isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
-            state.error?.let { ErrorText(it) }
-            Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
+        Image(painterResource(Res.drawable.event_poster_wall), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+        Box(Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(spacing.xxl)) {
+            VentMark(logoInk, Modifier.size(spacing.touch))
         }
+        Surface(
+            modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(spacing.lg)
+                .widthIn(max = spacing.compactBreakpoint).fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = spacing.xs,
+            shadowElevation = spacing.sm,
+        ) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(spacing.xl),
+                verticalArrangement = Arrangement.spacedBy(spacing.md),
+            ) {
+                OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
+                    leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
+                    isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
+                state.error?.let { ErrorText(it) }
+                Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier.semantics { contentDescription = "Vent" }) {
+        val stroke = size.width * .10f
+        val tip = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
+        drawLine(ink, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), tip, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+        drawLine(ink, tip, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
     }
 }
 

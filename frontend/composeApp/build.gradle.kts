@@ -17,7 +17,7 @@ plugins {
 val backendUrl = providers.environmentVariable("BACKEND_URL").orElse("")
 val mobileBackendUrl = providers.gradleProperty("VENT_MOBILE_BACKEND_URL").orElse(backendUrl)
 val backendConfigDirectory = layout.buildDirectory.dir("generated/vent/backendConfig")
-val generateBackendConfig by tasks.registering {
+val generateBackendConfig = tasks.register("generateBackendConfig") {
     inputs.property("backendUrl", backendUrl)
     inputs.property("mobileBackendUrl", mobileBackendUrl)
     outputs.dir(backendConfigDirectory)
@@ -36,9 +36,10 @@ val generateBackendConfig by tasks.registering {
             ) { "$setting must be an HTTPS origin, or an HTTP loopback origin for local development." }
             return value
         }
-        val webOrigin = validatedOrigin(backendUrl.get(), "BACKEND_URL")
-        val mobileOrigin = validatedOrigin(mobileBackendUrl.get(), "VENT_MOBILE_BACKEND_URL")
-        val output = backendConfigDirectory.get().file("BackendConfig.kt").asFile
+        val properties = inputs.properties
+        val webOrigin = validatedOrigin(properties.getValue("backendUrl") as String, "BACKEND_URL")
+        val mobileOrigin = validatedOrigin(properties.getValue("mobileBackendUrl") as String, "VENT_MOBILE_BACKEND_URL")
+        val output = outputs.files.singleFile.resolve("BackendConfig.kt")
         output.parentFile.mkdirs()
         output.writeText(
             "package app.vent.data\n\n" +

@@ -2,7 +2,10 @@ package app.vent
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,7 +34,16 @@ internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creat
                 Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
                     (1..2).forEach { option -> FilterChip(day == option, { day = option }, { Text("Day $option") }) }
                 }
-                OutlinedTextField(time, { time = it.take(160) }, label = { Text("Time") }, singleLine = true)
+                val times = time.split(Regex("\\s*[–—]\\s*|\\s+-\\s+"), limit = 2)
+                val start = times.getOrElse(0) { "" }
+                val end = times.getOrElse(1) { "" }
+                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                    SessionClock("Start", start, Modifier.weight(1f)) { time = "$it – $end" }
+                    SessionClock("End", end, Modifier.weight(1f)) { time = "$start – $it" }
+                }
+                if (sessionClockMinutes(start) != null && sessionClockMinutes(end) != null && !validSessionTimeRange(time)) {
+                    Text("End time must be after start time.", color = MaterialTheme.colorScheme.error)
+                }
                 OutlinedTextField(hall, { hall = it.take(160) }, label = { Text("Hall") }, singleLine = true)
                 OutlinedTextField(speaker, { speaker = it.take(160) }, label = { Text("Speakers") }, singleLine = true)
                 SessionHeaderImage(headerImage, Modifier.fillMaxWidth().aspectRatio(2f))
@@ -42,10 +54,53 @@ internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creat
         },
         confirmButton = {
             Button({ save(SessionDetails(title.trim(), time.trim(), hall.trim(), speaker.trim(), headerImage, day)) },
-                enabled = listOf(title, time, hall, speaker).all { it.isNotBlank() }) { Text(if (creating) "Create" else "Save") }
+                enabled = listOf(title, hall, speaker).all { it.isNotBlank() } && validSessionTimeRange(time)) { Text(if (creating) "Create" else "Save") }
         },
         dismissButton = { TextButton(close) { Text("Cancel") } },
     )
+}
+
+internal fun sessionClockMinutes(value: String): Int? {
+    val parts = Regex("(1[0-2]|[1-9]):([0-5][0-9])\\s*(AM|PM)", RegexOption.IGNORE_CASE)
+        .matchEntire(value.trim())?.groupValues ?: return null
+    return (parts[1].toInt() % 12 + if (parts[3].equals("PM", true)) 12 else 0) * 60 + parts[2].toInt()
+}
+
+internal fun validSessionTimeRange(value: String): Boolean {
+    val times = value.split(Regex("\\s*[–—]\\s*|\\s+-\\s+"), limit = 2)
+    val start = sessionClockMinutes(times.first()) ?: return false
+    val end = times.getOrNull(1)?.let(::sessionClockMinutes) ?: return false
+    return end > start
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionClock(label: String, value: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    OutlinedButton({ open = true }, modifier) {
+        Icon(Icons.Outlined.Schedule, null)
+        Spacer(Modifier.width(MaterialTheme.spacing.xs))
+        Text(value.trim().ifBlank { label }, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+    }
+    if (open) {
+        val minutes = sessionClockMinutes(value) ?: if (label == "Start") 9 * 60 else 10 * 60
+        val clock = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60, is24Hour = false)
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text("$label time") },
+            text = { TimePicker(clock) },
+            confirmButton = {
+                TextButton({
+                    val hour = (clock.hour + 11) % 12 + 1
+                    val minute = clock.minute.toString().padStart(2, '0')
+                    val period = if (clock.hour < 12) "AM" else "PM"
+                    onChange("$hour:$minute $period")
+                    open = false
+                }) { Text("Set time") }
+            },
+            dismissButton = { TextButton({ open = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
@@ -69,8 +124,24 @@ internal fun CreateQuestDialog(close: () -> Unit, save: (QuestDefinition) -> Uni
                 OutlinedTextField(title, { title = it.take(100) }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(prompt, { prompt = it.take(300) }, label = { Text(if (kind == "Action") "Action to complete" else "Question") })
                 if (kind != "Action") OutlinedTextField(choices, { choices = it.take(800) }, label = { Text("Choices, one per line") })
-                if (kind == "Quiz") OutlinedTextField(correct, { correct = it.take(300) }, label = { Text("Correct choice, as written above") }, singleLine = true)
-                OutlinedTextField(points, { points = it.filter(Char::isDigit).take(4) }, label = { Text("Reward points") }, singleLine = true)
+                if (kind == "Quiz" && options.isNotEmpty()) {
+                    Text("Correct answer", style = MaterialTheme.typography.labelLarge)
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
+                    ) {
+                        options.forEach { option ->
+                            FilterChip(correct == option, { correct = option }, {
+                                Text(option, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }, modifier = Modifier.widthIn(max = MaterialTheme.spacing.huge * 4))
+                        }
+                    }
+                }
+                OutlinedTextField(points, { points = it.filter { digit -> digit in '0'..'9' }.take(4) },
+                    label = { Text("Reward points") }, singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                    ))
             }
         },
         confirmButton = {
