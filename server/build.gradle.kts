@@ -1,5 +1,6 @@
 plugins {
     application
+    alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
