@@ -17,6 +17,8 @@ Local commands are available when needed:
 
 For local OTP demos, run the backend with `VENT_DEMO_OTP_LOGGING=true`. Android emulators connect to `10.0.2.2:8080`; the Wasm client expects the backend on port `8081` so it does not collide with the web development server.
 
+Set `BACKEND_URL` to the backend's public HTTPS origin before building Android or Wasm for a hosted deployment. Use the public origin without `/api/v1`.
+
 ## Configuration
 
 Copy `.env.example` values into the shell or IDE run configuration. Never commit secrets. Production variables live in Railway and GitHub environment secrets.

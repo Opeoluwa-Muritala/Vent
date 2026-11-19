@@ -20,3 +20,16 @@ GitHub production secrets:
 - `VENT_API_URL`: public HTTPS URL without a trailing slash.
 
 The CI deployment runs only after Ubuntu and macOS verification jobs pass. Flyway applies forward-only migrations during service startup before Ktor accepts traffic. The health probe must return `{"status":"ok"}`.
+
+## Web frontend service
+
+Keep the root directory at the repository root and use the following settings for the separate web service.
+
+| Setting | Value |
+| --- | --- |
+| Build command | `sh ./gradlew :composeApp:wasmJsBrowserDistribution` |
+| Start command | `java frontend/StaticServer.java frontend/composeApp/build/dist/wasmJs/productionExecutable` |
+| Healthcheck path | `/` |
+| `BACKEND_URL` | Public HTTPS origin of the Ktor backend, without `/api/v1` |
+
+The Java runtime serves the generated files using Railway's `PORT`, including the WebAssembly MIME type. Configure the backend to allow the frontend's HTTPS origin. Use the frontend commands in the effective deployment configuration and keep the root `railway.toml` settings scoped to the backend.

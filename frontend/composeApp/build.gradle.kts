@@ -1,6 +1,7 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.net.URI
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -12,6 +13,31 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.ksp)
 }
+
+val backendUrl = providers.environmentVariable("BACKEND_URL").orElse("")
+val backendConfigDirectory = layout.buildDirectory.dir("generated/vent/backendConfig")
+val generateBackendConfig by tasks.registering {
+    inputs.property("backendUrl", backendUrl)
+    outputs.dir(backendConfigDirectory)
+    doLast {
+        val value = backendUrl.get().trim().removeSuffix("/")
+        if (value.isNotEmpty()) {
+            val uri = runCatching { URI(value) }.getOrNull()
+            require(
+                uri != null && uri.host != null && uri.rawUserInfo == null &&
+                    uri.rawPath.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null &&
+                    (uri.port == -1 || uri.port in 1..65535) &&
+                    (uri.scheme == "https" ||
+                        (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "[::1]"))) &&
+                    value.matches(Regex("[A-Za-z0-9:/._\\[\\]\\-]+")),
+            ) { "BACKEND_URL must be an HTTPS origin, or an HTTP loopback origin for local development." }
+        }
+        val output = backendConfigDirectory.get().file("BackendConfig.kt").asFile
+        output.parentFile.mkdirs()
+        output.writeText("package app.vent.data\n\ninternal const val CONFIGURED_BACKEND_URL = \"$value\"\n")
+    }
+}
+
 kotlin {
     android {
         namespace = "app.vent.shared"
@@ -31,6 +57,9 @@ kotlin {
         binaries.executable()
     }
     sourceSets {
+        commonMain {
+            kotlin.srcDir(generateBackendConfig)
+        }
         commonMain.dependencies {
             implementation(project(":shared-domain"))
             implementation(project(":shared-api"))
