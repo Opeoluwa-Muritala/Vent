@@ -23,13 +23,10 @@ The CI deployment runs only after Ubuntu and macOS verification jobs pass. Flywa
 
 ## Web frontend service
 
-Keep the root directory at the repository root and use the following settings for the separate web service.
+On the web service, keep the root directory at the repository root. Under Settings → Config as Code, set the Railway Config File to `/frontend/railway.toml`. Apply the change and deploy a revision containing that file.
 
 | Setting | Value |
 | --- | --- |
-| Build command | `sh ./gradlew :composeApp:wasmJsBrowserDistribution` |
-| Start command | `java frontend/StaticServer.java frontend/composeApp/build/dist/wasmJs/productionExecutable` |
-| Healthcheck path | `/` |
 | `BACKEND_URL` | Public HTTPS origin of the Ktor backend, without `/api/v1` |
 
-The Java runtime serves the generated files using Railway's `PORT`, including the WebAssembly MIME type. Configure the backend to allow the frontend's HTTPS origin. Use the frontend commands in the effective deployment configuration and keep the root `railway.toml` settings scoped to the backend.
+The frontend config builds the WebAssembly distribution and checks for `index.html` before deployment. The Java server listens on Railway's `PORT`, serves the files with the WebAssembly MIME type, and responds to the health check at `/`. Set the public domain's target port to match `PORT` and configure the backend to allow the frontend's HTTPS origin. In the frontend build log, verify that Railpack runs `wasmJsBrowserDistribution`.

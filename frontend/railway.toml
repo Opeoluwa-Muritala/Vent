@@ -1,0 +1,10 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "sh ./gradlew :composeApp:wasmJsBrowserDistribution && test -f frontend/composeApp/build/dist/wasmJs/productionExecutable/index.html"
+
+[deploy]
+startCommand = "java frontend/StaticServer.java frontend/composeApp/build/dist/wasmJs/productionExecutable"
+healthcheckPath = "/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
