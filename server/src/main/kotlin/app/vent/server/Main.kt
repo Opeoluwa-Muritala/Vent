@@ -67,7 +67,14 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
     install(CORS) {
         allowMethod(HttpMethod.Get); allowMethod(HttpMethod.Post); allowMethod(HttpMethod.Put); allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.Authorization); allowHeader(HttpHeaders.ContentType)
-        config.allowedOrigins.forEach { origin -> allowHost(origin.removePrefix("https://").removePrefix("http://"), schemes = listOf("https", "http")) }
+        config.allowedOrigins.forEach { origin ->
+            val uri = java.net.URI(origin)
+            require(
+                uri.scheme in setOf("http", "https") && uri.host != null && uri.userInfo == null &&
+                    uri.path.isNullOrEmpty() && uri.query == null && uri.fragment == null,
+            ) { "ALLOWED_ORIGINS must contain HTTP or HTTPS origins without paths" }
+            allowHost(uri.rawAuthority, schemes = listOf(uri.scheme))
+        }
     }
     install(RateLimit) {
         register(RateLimitName("auth")) { rateLimiter(limit = 10, refillPeriod = 1.minutes) }

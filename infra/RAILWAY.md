@@ -4,10 +4,13 @@ Create a Railway project with a PostgreSQL service and an empty service named `v
 
 Set these production variables on `vent-api`:
 
-- `DATABASE_URL`: reference the Railway PostgreSQL connection URL.
+- `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` when the database service is named `Postgres`. Enter this as the value, in the Variables tab of `vent-api`.
 - `JWT_SECRET`: at least 32 cryptographically random bytes.
-- `ALLOWED_ORIGINS`: comma-separated HTTPS origins for approved web clients.
+- `ALLOWED_ORIGINS`: comma-separated frontend origins, for example `http://localhost:8080,https://vent.app` if the browser frontend is served at those addresses. Match the scheme and port shown in the browser. Native Android does not need a CORS entry.
+- `VENT_DEMO_OTP_LOGGING`: `false` on public deployments. The current demo sender does not deliver email.
 - `PORT`: supplied by Railway.
+
+Keep the service root at the repository root. The Railway build uses `sh ./gradlew -p server installDist`, which works even if the wrapper lacks the executable bit. Set `RAILPACK_JDK_VERSION` to `17` to match the Gradle toolchain.
 
 GitHub production secrets:
 

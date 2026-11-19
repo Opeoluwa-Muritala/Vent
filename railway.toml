@@ -1,6 +1,6 @@
 [build]
 builder = "RAILPACK"
-buildCommand = "./gradlew -p server installDist"
+buildCommand = "sh ./gradlew -p server installDist"
 
 [deploy]
 startCommand = "./server/build/install/server/bin/server"
