@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.detekt)
 }
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(if (rootProject.name == "server") JavaVersion.current().majorVersion.toInt() else 17)
     jvm()
     iosArm64()
     iosSimulatorArm64()

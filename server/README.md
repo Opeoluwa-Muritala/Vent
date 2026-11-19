@@ -1,6 +1,6 @@
 # Vent backend
 
-The server has its own Gradle settings. From the repository root, use these commands with JDK 17 and PostgreSQL configured.
+The server has its own Gradle settings. From the repository root, use these commands with PostgreSQL configured and a supported JDK, such as 17 or 21. The standalone build uses the JDK running Gradle. Run the resulting distribution with that Java version or a compatible newer one.
 
 ```powershell
 .\gradlew.bat -p server run

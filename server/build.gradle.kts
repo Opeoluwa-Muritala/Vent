@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
 }
-kotlin { jvmToolchain(17) }
+kotlin { jvmToolchain(if (rootProject == project) JavaVersion.current().majorVersion.toInt() else 17) }
 application { mainClass.set("app.vent.server.MainKt") }
 dependencies {
     implementation(project(":shared-domain"))
@@ -20,6 +20,8 @@ dependencies {
     implementation(libs.ktor.server.rate.limit)
     implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.server.call.logging)
+    implementation(libs.ktor.server.default.headers)
+    implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.serialization.json)
     implementation(libs.exposed.core)
     implementation(libs.exposed.dao)

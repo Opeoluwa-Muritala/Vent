@@ -10,7 +10,7 @@ Set these production variables on `vent-api`:
 - `VENT_DEMO_OTP_LOGGING`: `false` on public deployments. The current demo sender does not deliver email.
 - `PORT`: supplied by Railway.
 
-Keep the service root at the repository root. The Railway build uses `sh ./gradlew -p server installDist`, which works even if the wrapper lacks the executable bit. Set `RAILPACK_JDK_VERSION` to `17` to match the Gradle toolchain.
+Keep the service root at the repository root. The Railway build uses `sh ./gradlew -p server installDist`, which works even if the wrapper lacks the executable bit. The standalone server build uses the JDK running Gradle. You can keep `RAILPACK_JDK_VERSION=17` or choose a supported newer version such as `21`.
 
 GitHub production secrets:
 
