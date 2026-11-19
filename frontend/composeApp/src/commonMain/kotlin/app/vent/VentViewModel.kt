@@ -87,6 +87,9 @@ private fun VentUiState.sessionSeating() = SessionSeating(confirmedSeat, isCheck
     seatLayoutMode, seatSelectionOpen, layoutPublication)
 
 class VentViewModel(private val localStore: VentLocalStore, private val attendeeOnly: Boolean = false, private val startAsOrganizer: Boolean = false, private val accountEmail: String = "") : MviViewModel<VentUiState, VentAction, VentEffect>(VentUiState()) {
+    internal suspend fun syncPreferences() {
+        (localStore as? app.vent.data.SyncingVentLocalStore)?.syncPreferences()
+    }
     private val writes = kotlinx.coroutines.channels.Channel<VentLocalState>(kotlinx.coroutines.channels.Channel.UNLIMITED)
     private var expectedWrite: VentLocalState? = null
 

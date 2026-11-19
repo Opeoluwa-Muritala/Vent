@@ -15,13 +15,16 @@ plugins {
 }
 
 val backendUrl = providers.environmentVariable("BACKEND_URL").orElse("")
+val mobileBackendUrl = providers.gradleProperty("VENT_MOBILE_BACKEND_URL").orElse(backendUrl)
 val backendConfigDirectory = layout.buildDirectory.dir("generated/vent/backendConfig")
 val generateBackendConfig by tasks.registering {
     inputs.property("backendUrl", backendUrl)
+    inputs.property("mobileBackendUrl", mobileBackendUrl)
     outputs.dir(backendConfigDirectory)
     doLast {
-        val value = backendUrl.get().trim().removeSuffix("/")
-        if (value.isNotEmpty()) {
+        fun validatedOrigin(raw: String, setting: String): String {
+            val value = raw.trim().removeSuffix("/")
+            if (value.isEmpty()) return value
             val uri = runCatching { URI(value) }.getOrNull()
             require(
                 uri != null && uri.host != null && uri.rawUserInfo == null &&
@@ -30,11 +33,18 @@ val generateBackendConfig by tasks.registering {
                     (uri.scheme == "https" ||
                         (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "[::1]"))) &&
                     value.matches(Regex("[A-Za-z0-9:/._\\[\\]\\-]+")),
-            ) { "BACKEND_URL must be an HTTPS origin, or an HTTP loopback origin for local development." }
+            ) { "$setting must be an HTTPS origin, or an HTTP loopback origin for local development." }
+            return value
         }
+        val webOrigin = validatedOrigin(backendUrl.get(), "BACKEND_URL")
+        val mobileOrigin = validatedOrigin(mobileBackendUrl.get(), "VENT_MOBILE_BACKEND_URL")
         val output = backendConfigDirectory.get().file("BackendConfig.kt").asFile
         output.parentFile.mkdirs()
-        output.writeText("package app.vent.data\n\ninternal const val CONFIGURED_BACKEND_URL = \"$value\"\n")
+        output.writeText(
+            "package app.vent.data\n\n" +
+                "internal const val CONFIGURED_BACKEND_URL = \"$webOrigin\"\n" +
+                "internal const val CONFIGURED_MOBILE_BACKEND_URL = \"$mobileOrigin\"\n",
+        )
     }
 }
 

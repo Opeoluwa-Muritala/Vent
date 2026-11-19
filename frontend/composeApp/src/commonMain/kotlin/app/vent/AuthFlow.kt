@@ -1,7 +1,6 @@
 package app.vent
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,11 +14,6 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,10 +24,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vent.api.EventDto
-import app.vent.composeapp.generated.resources.Res
-import app.vent.composeapp.generated.resources.event_poster_wall
-import org.jetbrains.compose.resources.painterResource
-import androidx.compose.ui.layout.ContentScale
 import app.vent.data.VentApi
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
@@ -57,10 +47,11 @@ data class AuthUiState(
     val resendSeconds: Int = 0,
     val localAttendee: Boolean = false,
     val organizer: Boolean = false,
+    val signInGeneration: Int = 0,
 )
 
 class AuthViewModel(
-    private val api: VentApi,
+    internal val api: VentApi,
     private val localStore: app.vent.data.VentLocalStore? = null,
     private val allowLocalOrganizer: Boolean = false,
 ) : ViewModel() {
@@ -109,7 +100,7 @@ class AuthViewModel(
             }
         }
     }
-    fun changeEmail() = mutableState.update { AuthUiState(email = it.email) }
+    fun changeEmail() = mutableState.update { AuthUiState(email = it.email, signInGeneration = it.signInGeneration) }
     fun signInLocally() {
         val email = state.value.email.trim().lowercase()
         if (state.value.step != AuthStep.EMAIL || state.value.loading) return
@@ -120,7 +111,7 @@ class AuthViewModel(
         launchRequest {
             val registered = localStore?.load()?.settings?.registeredAttendees.orEmpty()
             mutableState.value = if (email in registered || (allowLocalOrganizer && email == LOCAL_ORGANIZER_EMAIL)) {
-                AuthUiState(step = AuthStep.CODE, email = email, localAttendee = true)
+                AuthUiState(step = AuthStep.CODE, email = email, localAttendee = true, signInGeneration = state.value.signInGeneration)
             } else state.value.copy(loading = false, error = "This email is not registered on this device.")
         }
     }
@@ -129,7 +120,10 @@ class AuthViewModel(
             it.copy(step = AuthStep.AUTHENTICATED, events = listOf(event))
         } else it
     }
-    fun signOut() { api.clearSession(); mutableState.value = AuthUiState() }
+    fun signOut() {
+        api.clearSession()
+        mutableState.update { AuthUiState(signInGeneration = it.signInGeneration + 1) }
+    }
 
     private fun launchRequest(block: suspend () -> Unit) {
         if (state.value.loading) return
@@ -167,53 +161,31 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
 @Composable private fun EmailScreen(state: AuthUiState, onEmail: (String) -> Unit, onSubmit: () -> Unit) {
     val spacing = MaterialTheme.spacing
     val logoInk = MaterialTheme.colorScheme.onPrimary
-    val entrance = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { entrance.animateTo(1f, tween(400)) }
     Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-        contentAlignment = Alignment.BottomCenter,
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).safeDrawingPadding().imePadding(),
+        contentAlignment = Alignment.Center,
     ) {
-        Image(painterResource(Res.drawable.event_poster_wall), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-        Surface(
-            Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(spacing.xxl)
-                .graphicsLayer { alpha = entrance.value; translationY = (1f - entrance.value) * spacing.md.toPx() },
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = spacing.sm,
+        Column(
+            Modifier.padding(spacing.lg).widthIn(max = spacing.compactBreakpoint).fillMaxWidth()
+                .verticalScroll(rememberScrollState()).padding(spacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
-            Row(Modifier.padding(spacing.lg), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary) {
-                    androidx.compose.foundation.Canvas(Modifier.size(spacing.touch)) {
-                        val stroke = size.width * .10f
-                        val point = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
-                        drawLine(logoInk, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), point, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-                        drawLine(logoInk, point, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-                    }
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary) {
+                androidx.compose.foundation.Canvas(Modifier.size(spacing.heroIcon).semantics { contentDescription = "Vent" }) {
+                    val stroke = size.width * .10f
+                    val point = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
+                    drawLine(logoInk, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), point, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawLine(logoInk, point, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
                 }
             }
+            OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
+                leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
+                isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
+            state.error?.let { ErrorText(it) }
+            Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
         }
-        Surface(
-            modifier = Modifier.safeDrawingPadding().imePadding().padding(spacing.lg)
-                .widthIn(max = spacing.compactBreakpoint).fillMaxWidth(),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = .94f),
-            tonalElevation = spacing.xs,
-            shadowElevation = spacing.sm,
-        ) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(spacing.md)) {
-        Text("Sign in", style = MaterialTheme.typography.headlineLarge)
-        Text("Enter your registered email to continue on this device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
-            placeholder = { Text("attendee@vent.demo") },
-            leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
-            isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
-        state.error?.let { ErrorText(it) }
-        Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
-        Text("Not registered? Ask your organizer to add you.", style = MaterialTheme.typography.bodySmall)
-        }
-    } }
+    }
 }
 
 @Composable private fun CodeScreen(state: AuthUiState, onCode: (String) -> Unit, onVerify: () -> Unit, onBack: () -> Unit, onResend: () -> Unit) {

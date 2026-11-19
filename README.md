@@ -19,6 +19,8 @@ For local OTP demos, run the backend with `VENT_DEMO_OTP_LOGGING=true`. Android 
 
 Set `BACKEND_URL` to the backend's public HTTPS origin before building Android or Wasm for a hosted deployment. Use the public origin without `/api/v1`.
 
+To configure Android separately, set `VENT_MOBILE_BACKEND_URL` in your user-level Gradle properties file (typically `%USERPROFILE%\.gradle\gradle.properties` on Windows). It takes precedence over `BACKEND_URL` for Android. The URL is embedded in the app. Server credentials belong in server environment variables.
+
 ## Configuration
 
 Copy `.env.example` values into the shell or IDE run configuration. Never commit secrets. Production variables live in Railway and GitHub environment secrets.

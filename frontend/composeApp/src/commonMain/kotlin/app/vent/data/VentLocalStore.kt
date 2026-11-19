@@ -23,6 +23,7 @@ data class SummitSettings(
     val questDefinitions: List<QuestDefinition> = emptyList(),
     val questResponses: Map<String, Map<String, String>> = emptyMap(),
     val seatAssignments: Map<SummitSession, Map<String, String>> = emptyMap(),
+    val preferencesPendingSync: Boolean = false,
 ) {
     // Older snapshots may have saved the original seeded address explicitly.
     val registeredAttendees: Set<String>
@@ -31,6 +32,7 @@ data class SummitSettings(
         } else attendees
 }
 
+@Serializable
 data class VentLocalState(
     val confirmedSeat: String = "B4",
     val checkedIn: Boolean = false,
@@ -45,4 +47,4 @@ interface VentLocalStore {
 }
 
 @Composable
-expect fun rememberVentLocalStore(): VentLocalStore
+expect fun rememberVentLocalStore(account: String = ""): VentLocalStore

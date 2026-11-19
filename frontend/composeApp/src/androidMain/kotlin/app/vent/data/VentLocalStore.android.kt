@@ -63,10 +63,11 @@ private class RoomVentLocalStore(private val dao: DemoStateDao) : VentLocalStore
 }
 
 @Composable
-actual fun rememberVentLocalStore(): VentLocalStore {
+actual fun rememberVentLocalStore(account: String): VentLocalStore {
     val context = LocalContext.current.applicationContext
-    return remember(context) {
-        val database = Room.databaseBuilder(context, VentDatabase::class.java, "vent-demo.db")
+    return remember(context, account) {
+        val name = if (account.isEmpty()) "vent-demo.db" else "vent-account-${java.util.UUID.nameUUIDFromBytes(account.encodeToByteArray())}.db"
+        val database = Room.databaseBuilder(context, VentDatabase::class.java, name)
             .addMigrations(object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE demo_state ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'")

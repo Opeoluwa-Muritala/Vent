@@ -7,6 +7,7 @@ import app.vent.api.OtpRequest
 import app.vent.api.OtpRequestResponse
 import app.vent.api.OtpVerifyRequest
 import app.vent.api.RefreshRequest
+import app.vent.api.UserPreferencesDto
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -34,6 +35,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
@@ -116,6 +118,39 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
                 }
             }
             authenticate("auth-jwt") {
+                get("/me/preferences") {
+                    val userId = requireNotNull(call.principal<UserPrincipal>()).userId
+                    val preferences = dataSource.connection.use { connection ->
+                        connection.prepareStatement("SELECT payload FROM user_preferences WHERE user_id = ?::uuid").use { statement ->
+                            statement.setString(1, userId)
+                            statement.executeQuery().use { rows ->
+                                if (rows.next()) Json.decodeFromString<UserPreferencesDto>(rows.getString(1)) else UserPreferencesDto()
+                            }
+                        }
+                    }
+                    call.respond(preferences)
+                }
+                rateLimit(RateLimitName("write")) {
+                    put("/me/preferences") {
+                        val userId = requireNotNull(call.principal<UserPrincipal>()).userId
+                        val preferences = call.receive<UserPreferencesDto>()
+                        require(listOf(preferences.bookmarks, preferences.preferences).all { items ->
+                            items.size <= 200 && items.all { it.isNotBlank() && it.length <= 200 }
+                        }) { "invalid_preferences" }
+                        dataSource.connection.use { connection ->
+                            connection.prepareStatement(
+                                "INSERT INTO user_preferences (user_id, payload) VALUES (?::uuid, ?::jsonb) " +
+                                    "ON CONFLICT (user_id) DO UPDATE SET payload = EXCLUDED.payload",
+                            ).use { statement ->
+                                statement.setString(1, userId)
+                                statement.setString(2, Json.encodeToString(preferences))
+                                statement.executeUpdate()
+                            }
+                            connection.commit()
+                        }
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+                }
                 get("/me") {
                     val userId = requireNotNull(call.principal<UserPrincipal>()).userId
                     val organizer = dataSource.connection.use { connection ->

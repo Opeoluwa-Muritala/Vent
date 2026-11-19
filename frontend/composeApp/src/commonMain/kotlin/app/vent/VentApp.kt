@@ -2,6 +2,9 @@ package app.vent
 
 import app.vent.data.rememberVentLocalStore
 import app.vent.data.createVentApi
+import app.vent.data.SyncingVentLocalStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import app.vent.ui.theme.VentTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavBackStack
@@ -100,13 +103,33 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
     VentTheme {
         val localStore = rememberVentLocalStore()
         val authViewModel = viewModel { AuthViewModel(createVentApi(), localStore, allowLocalOrganizer) }
+        val api = authViewModel.api
         val authState by authViewModel.state.collectAsState()
         if (authState.step != AuthStep.AUTHENTICATED) {
-            AuthFlow(authState, authViewModel::updateEmail, authViewModel::updateCode, authViewModel::requestCode, authViewModel::verify, authViewModel::changeEmail, authViewModel::chooseEvent, authViewModel::signInLocally)
+            val submitEmail = if (allowLocalOrganizer) authViewModel::signInLocally else authViewModel::requestCode
+            AuthFlow(authState, authViewModel::updateEmail, authViewModel::updateCode, authViewModel::requestCode, authViewModel::verify, authViewModel::changeEmail, authViewModel::chooseEvent, submitEmail)
             return@VentTheme
         }
-        val ventViewModel = viewModel(key = "vent:${authState.organizer}:${authState.email}") {
-            VentViewModel(localStore, attendeeOnly = !authState.organizer, startAsOrganizer = authState.organizer, accountEmail = authState.email)
+        val account = if (authState.localAttendee) "" else authState.email.trim().lowercase()
+        val accountStore = rememberVentLocalStore(account)
+        val syncStore = remember(accountStore, api) {
+            if (account.isEmpty()) null else SyncingVentLocalStore(accountStore, api)
+        }
+        val ventViewModel = viewModel(key = "vent:${authState.signInGeneration}:${authState.organizer}:${authState.email}:${authState.localAttendee}") {
+            VentViewModel(syncStore ?: accountStore, attendeeOnly = !authState.organizer, startAsOrganizer = authState.organizer, accountEmail = authState.email)
+        }
+        LaunchedEffect(ventViewModel) {
+            if (account.isEmpty()) return@LaunchedEffect
+            while (true) {
+                try {
+                    ventViewModel.syncPreferences()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Keep local changes pending until the API is reachable.
+                }
+                delay(15_000)
+            }
         }
         val uiState by ventViewModel.uiState.collectAsState()
         val onAction = ventViewModel::onAction

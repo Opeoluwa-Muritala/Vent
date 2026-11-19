@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class UserDto(val id: String, val name: String, val email: String, val roles: List<EventRoleDto>)
 @Serializable data class EventRoleDto(val eventId: String, val role: String)
 @Serializable data class EventDto(val id: String, val title: String, val startsAt: String, val endsAt: String, val seedArgb: String, val sessions: List<SessionDto> = emptyList())
+@Serializable data class UserPreferencesDto(val bookmarks: Set<String> = emptySet(), val preferences: Set<String> = emptySet())
 @Serializable data class CreateEventRequest(val title: String, val startsAt: String, val endsAt: String, val seedArgb: String, val coverImageUrl: String? = null)
 @Serializable data class UpdateSeedRequest(val seedArgb: String)
 @Serializable data class HallDto(val id: String, val name: String, val width: Double, val height: Double, val seats: List<SeatDto>, val elements: List<HallElementDto>)

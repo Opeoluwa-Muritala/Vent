@@ -3,22 +3,24 @@ package app.vent.data
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import platform.Foundation.NSUserDefaults
+import kotlinx.serialization.json.Json
 
-private class IosVentLocalStore : VentLocalStore {
+private class IosVentLocalStore(private val account: String) : VentLocalStore {
     private val defaults = NSUserDefaults.standardUserDefaults
+    private val key = "vent.state.$account"
 
-    override suspend fun load(): VentLocalState = VentLocalState(
+    override suspend fun load(): VentLocalState = defaults.stringForKey(key)?.let {
+        Json.decodeFromString<VentLocalState>(it)
+    } ?: if (account.isNotEmpty()) VentLocalState() else VentLocalState(
         confirmedSeat = defaults.stringForKey("vent.confirmedSeat") ?: "B4",
         checkedIn = defaults.boolForKey("vent.checkedIn"),
         organizerMode = defaults.boolForKey("vent.organizerMode"),
     )
 
     override suspend fun save(state: VentLocalState) {
-        defaults.setObject(state.confirmedSeat, forKey = "vent.confirmedSeat")
-        defaults.setBool(state.checkedIn, forKey = "vent.checkedIn")
-        defaults.setBool(state.organizerMode, forKey = "vent.organizerMode")
+        defaults.setObject(Json.encodeToString(state), forKey = key)
     }
 }
 
 @Composable
-actual fun rememberVentLocalStore(): VentLocalStore = remember { IosVentLocalStore() }
+actual fun rememberVentLocalStore(account: String): VentLocalStore = remember(account) { IosVentLocalStore(account) }
