@@ -6,9 +6,9 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_vent"
         android:roundIcon="@mipmap/ic_vent"
-        android:label="Vent"
+        android:label="Events"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/Theme.Events.Starting">
         <activity
             android:name=".MainActivity"
             android:exported="true">

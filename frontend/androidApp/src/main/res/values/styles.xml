@@ -1,9 +1,15 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@color/events_surface_low</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+    <style name="Theme.Events.Starting" parent="AppTheme">
+        <item name="android:windowSplashScreenBackground">@color/events_surface_low</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_events_mark</item>
+        <item name="android:windowSplashScreenAnimationDuration">300</item>
     </style>
 </resources>

@@ -106,6 +106,10 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
         verticalArrangement = Arrangement.spacedBy(space.lg)) {
         item { EventHero(session, details) { onAction(VentAction.Navigate(VentScreen.SCHEDULE)) } }
         item {
+            Text(details.title, Modifier.padding(horizontal = space.lg),
+                style = MaterialTheme.typography.headlineLarge)
+        }
+        item {
             Card(Modifier.fillMaxWidth().padding(horizontal = if (expanded) space.huge else space.lg)) {
                 Column(Modifier.padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.lg)) {
                     DetailLine(Icons.Outlined.Schedule, "SESSION TIME", details.time)
@@ -115,8 +119,11 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
                         Button({ editing = true }, Modifier.fillMaxWidth()) { Text("Edit session details") }
                     } else {
                         DetailLine(Icons.Outlined.Chair, "ASSIGNED SEAT", uiState.confirmedSeat.ifBlank { "Not selected" })
+                        Text("What to do here", style = MaterialTheme.typography.titleLarge)
+                        Button({ onAction(VentAction.Navigate(VentScreen.SCANNER)) },
+                            Modifier.fillMaxWidth().height(space.action)) { Text("Check in") }
                     }
-                    Button({ onAction(VentAction.Navigate(VentScreen.SEAT)) }, Modifier.fillMaxWidth()) {
+                    OutlinedButton({ onAction(VentAction.Navigate(VentScreen.SEAT)) }, Modifier.fillMaxWidth().height(space.action)) {
                         Icon(Icons.Outlined.Chair, null); Spacer(Modifier.width(space.sm))
                         Text(if (uiState.role == DemoRole.ORGANIZER) "Edit seating" else if (uiState.confirmedSeat.isBlank()) "Select seat" else "View or change seat")
                     }
@@ -124,7 +131,8 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
             }
         }
     }
-    if (editing && uiState.role == DemoRole.ORGANIZER) EditSessionDialog(details, { editing = false }, eventDays = uiState.eventDays) {
+    if (editing && uiState.role == DemoRole.ORGANIZER) EditSessionDialog(details, { editing = false }, eventDays = uiState.eventDays,
+        halls = (SummitSession.entries + uiState.sessionDetails.keys).map { uiState.sessionDetails[it]?.room ?: it.room }.distinct()) {
         onAction(VentAction.SaveSessionDetails(session, it))
         editing = false
     }
@@ -133,7 +141,7 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
 @Composable private fun EventHero(session: SummitSession, details: SessionDetails, onBack: () -> Unit) {
     val space = MaterialTheme.spacing
     val ink = app.vent.ui.theme.SessionHeaderForeground
-    Box {
+    Box(Modifier.fillMaxWidth().height(space.action * 4 - space.xs)) {
         SessionHeaderImage(details.headerImage, Modifier.matchParentSize())
         if (details.headerImage != null) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = .82f)))
         Column(Modifier.fillMaxWidth().safeDrawingPadding().padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.sm)) {
@@ -143,7 +151,6 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.scrim.copy(alpha = .42f)) {
                 Text(session.track, Modifier.padding(horizontal = space.md, vertical = space.xs), color = ink, style = MaterialTheme.typography.labelLarge)
             }
-            Text(details.title, color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
                 Icon(Icons.Outlined.CalendarMonth, null, tint = ink); Text("Day ${details.day}", color = ink)
             }
@@ -243,15 +250,36 @@ internal fun AttendeeImportScreen(emails: Set<String>, dispatch: (VentAction) ->
         OutlinedTextField(state.query, { viewModel.onIntent(AttendeeImportIntent.Search(it)) },
             Modifier.fillMaxWidth(), label = { Text("Search email addresses") }, singleLine = true)
         LazyColumn {
+            if (emails.isEmpty()) item {
+                Column(Modifier.fillMaxWidth().padding(MaterialTheme.spacing.xxl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                    Icon(Icons.Outlined.Group, null, Modifier.size(MaterialTheme.spacing.heroIcon))
+                    Text("No attendees yet", style = MaterialTheme.typography.headlineSmall)
+                    Text("Add email addresses or upload a CSV to invite attendees.")
+                    Button({ entry = true }) { Text("Add attendees") }
+                }
+            }
             items(emails.sorted().filter { it.contains(state.query, ignoreCase = true) }) { email ->
-                Text(email, Modifier.padding(vertical = MaterialTheme.spacing.md))
+                Row(Modifier.fillMaxWidth().heightIn(min = MaterialTheme.spacing.touch + MaterialTheme.spacing.lg),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(email, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    AssistChip({}, { Text("Registered") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) })
+                }
             }
         }
     }
     if (entry) androidx.compose.material3.AlertDialog(
         onDismissRequest = { entry = false },
         title = { Text("Add attendees") },
-        text = { OutlinedTextField(input, { input = it.take(1_048_576) }, label = { Text("Email addresses or CSV text") }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                OutlinedTextField(input, { input = it.take(1_048_576) },
+                    label = { Text("Email addresses") }, placeholder = { Text("name@example.com, one per line") })
+                Text("Or upload a CSV with an email column.", style = MaterialTheme.typography.labelLarge)
+                if (attendeeEmails(input).isEmpty()) Text("Add at least one email.", style = MaterialTheme.typography.labelLarge)
+            }
+        },
         confirmButton = { Button({ add(input) }, enabled = attendeeEmails(input).isNotEmpty()) { Text("Save attendees") } },
         dismissButton = { TextButton({ entry = false }) { Text("Cancel") } },
     )

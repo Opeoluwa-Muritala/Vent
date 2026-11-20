@@ -58,6 +58,7 @@ hs_err_pid*
 replay_pid*
 captures/
 coverage/
+tmp/
 
 # Operating-system temporary files
 .DS_Store

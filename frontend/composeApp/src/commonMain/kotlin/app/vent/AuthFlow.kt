@@ -19,6 +19,14 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.MarkEmailRead
+import app.vent.ui.theme.heroTint
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -165,31 +173,42 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
 
 @Composable private fun EmailScreen(state: AuthUiState, onEmail: (String) -> Unit, onSubmit: () -> Unit) {
     val spacing = MaterialTheme.spacing
-    val logoInk = app.vent.ui.theme.SessionHeaderForeground
+    val logoInk = MaterialTheme.colorScheme.primary
+    val heroTint = MaterialTheme.colorScheme.heroTint
     Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
     ) {
         Image(painterResource(Res.drawable.event_poster_wall), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-        Box(Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(spacing.xxl)) {
-            VentMark(logoInk, Modifier.size(spacing.touch))
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+            0.4f to heroTint.copy(alpha = 0f), 1f to heroTint,
+        )))
+        Column(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(spacing.xxl),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            VentMark(logoInk, Modifier.size(spacing.huge))
+            Text("events", style = MaterialTheme.typography.titleLarge)
+            Text("Your summit pass", style = MaterialTheme.typography.headlineLarge)
         }
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().imePadding().padding(spacing.lg)
                 .widthIn(max = spacing.compactBreakpoint).fillMaxWidth(),
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = spacing.xs,
-            shadowElevation = spacing.sm,
+            color = heroTint.copy(alpha = .88f),
+            border = BorderStroke(spacing.xs / 4, MaterialTheme.colorScheme.onSurface.copy(alpha = .12f)),
         ) {
             Column(
-                Modifier.verticalScroll(rememberScrollState()).padding(spacing.xl),
+                Modifier.verticalScroll(rememberScrollState()).padding(spacing.xxl),
                 verticalArrangement = Arrangement.spacedBy(spacing.md),
             ) {
-                OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth(), label = { Text("Email") },
-                    leadingIcon = { Icon(Icons.Outlined.Email, null) }, singleLine = true, enabled = !state.loading,
+                OutlinedTextField(state.email, onEmail, Modifier.fillMaxWidth().heightIn(min = spacing.action), label = { Text("Email") },
+                    leadingIcon = { Icon(painterResource(app.vent.ui.theme.EventIcons.mail), null) },
+                    shape = MaterialTheme.shapes.small,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.secondary),
+                    singleLine = true, enabled = !state.loading,
                     isError = state.error != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done))
                 state.error?.let { ErrorText(it) }
                 Button(onSubmit, Modifier.fillMaxWidth().height(spacing.action), enabled = !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Send code") }
+                Text("We send a six-digit code. No password.", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -197,20 +216,31 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
 
 @Composable
 internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
-    androidx.compose.foundation.Canvas(modifier.semantics { contentDescription = "Vent" }) {
-        val stroke = size.width * .10f
-        val tip = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .73f)
-        drawLine(ink, androidx.compose.ui.geometry.Offset(size.width * .26f, size.height * .30f), tip, stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-        drawLine(ink, tip, androidx.compose.ui.geometry.Offset(size.width * .74f, size.height * .30f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+    val live = MaterialTheme.colorScheme.tertiary
+    androidx.compose.foundation.Canvas(modifier.semantics { contentDescription = "events" }) {
+        val unit = size.minDimension / 96f
+        drawArc(ink, 45f, 315f, false, Offset(26f * unit, 26f * unit),
+            Size(44f * unit, 44f * unit), style = Stroke(9f * unit, cap = StrokeCap.Round))
+        drawLine(ink, Offset(30f * unit, 48f * unit), Offset(70f * unit, 48f * unit),
+            9f * unit, StrokeCap.Round)
+        drawCircle(live, 6f * unit, Offset(78f * unit, 18f * unit))
     }
 }
 
 @Composable private fun CodeScreen(state: AuthUiState, onCode: (String) -> Unit, onVerify: () -> Unit, onBack: () -> Unit, onResend: () -> Unit) {
     val spacing = MaterialTheme.spacing
-    Scaffold(topBar = { IconButton(onBack, Modifier.minimumInteractiveComponentSize()) { Icon(Icons.Outlined.ArrowBack, "Change email") } }) { insets ->
+    Scaffold(topBar = { Box(Modifier.safeDrawingPadding().padding(top = spacing.lg)) {
+        IconButton(onBack, Modifier.minimumInteractiveComponentSize()) { Icon(Icons.Outlined.ArrowBack, "Change email") }
+    } }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).imePadding().padding(horizontal = spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.lg)) {
             Spacer(Modifier.weight(1f))
-            Surface(Modifier.size(spacing.heroIcon), shape = MaterialTheme.shapes.extraLarge, border = BorderStroke(spacing.xs, MaterialTheme.colorScheme.primary)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, "Email sent") } }
+            Surface(Modifier.size(spacing.heroIcon), shape = CircleShape,
+                border = BorderStroke(spacing.xs / 4, MaterialTheme.colorScheme.tertiary)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(painterResource(app.vent.ui.theme.EventIcons.mailOpen), "Email sent",
+                        tint = if (state.error == null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error)
+                }
+            }
             Text(if (state.localAttendee) "Enter your code" else "Check your email", style = MaterialTheme.typography.headlineLarge)
             Text(
                 if (state.localAttendee) "Enter the six-digit on-device code."
@@ -222,6 +252,8 @@ internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifie
             })
             state.error?.let { ErrorText(it) }
             Button(onVerify, Modifier.fillMaxWidth().height(spacing.action), enabled = state.code.length == 6 && !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Verify") }
+            if (state.code.length < 6) Text("Enter all six digits to continue.",
+                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!state.localAttendee) {
                 TextButton(onResend, enabled = !state.loading && state.resendSeconds == 0) { Text(if (state.resendSeconds > 0) "Resend code in 0:${state.resendSeconds.toString().padStart(2, '0')}" else "Send a new code") }
             }
@@ -242,6 +274,9 @@ internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifie
 @Composable private fun ErrorText(message: String) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) { Icon(Icons.Outlined.ErrorOutline, "Error", tint = MaterialTheme.colorScheme.error); Text(message, color = MaterialTheme.colorScheme.error) } }
 
 @Preview @Composable private fun EmailPreview() { VentTheme { EmailScreen(AuthUiState(), {}, {}) } }
+@Preview @Composable private fun EmailLoadingPreview() { VentTheme { EmailScreen(AuthUiState(loading = true), {}, {}) } }
+@Preview @Composable private fun CodeLightPreview() { VentTheme(darkTheme = false) { CodeScreen(AuthUiState(step = AuthStep.CODE, code = "123"), {}, {}, {}, {}) } }
+@Preview @Composable private fun CodeErrorLightPreview() { VentTheme(darkTheme = false) { CodeScreen(AuthUiState(step = AuthStep.CODE, error = "That code didn't match. Try again or request a new one."), {}, {}, {}, {}) } }
 @Preview @Composable private fun EmailErrorDarkPreview() { VentTheme(darkTheme = true) { EmailScreen(AuthUiState(email = "bad", error = "That email doesn't look right."), {}, {}) } }
 @Preview @Composable private fun CodePreview() { VentTheme { CodeScreen(AuthUiState(step = AuthStep.CODE, email = "ada@company.com", code = "123"), {}, {}, {}, {}) } }
 @Preview @Composable private fun CodeErrorDarkPreview() { VentTheme(darkTheme = true) { CodeScreen(AuthUiState(step = AuthStep.CODE, email = "ada@company.com", error = "That code isn't right. 3 tries left."), {}, {}, {}, {}) } }

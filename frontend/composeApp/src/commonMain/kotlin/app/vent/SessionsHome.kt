@@ -37,31 +37,29 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     val scope = rememberCoroutineScope()
     val space = MaterialTheme.spacing
     val scheme = MaterialTheme.colorScheme
-    val sessionColors = CardDefaults.cardColors(scheme.primaryContainer, scheme.onPrimaryContainer)
-    val sessionBorder = BorderStroke(1.dp, scheme.primary.copy(alpha = .55f))
-    val sessionShadow = Modifier.shadow(
-        4.dp, MaterialTheme.shapes.extraLarge,
-        ambientColor = scheme.primary, spotColor = scheme.primary,
-    )
+    val sessionColors = CardDefaults.cardColors(scheme.surface, scheme.onSurface)
+    val sessionBorder = BorderStroke(space.xs / 4, scheme.outline)
+    val sessionShadow = Modifier
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
     var createSession by rememberSaveable { mutableStateOf(false) }
     val organizer = ui.role == DemoRole.ORGANIZER
 
-    Box(Modifier.fillMaxSize().conferencePattern().safeDrawingPadding()) {
+    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth().padding(horizontal = space.lg)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(ui.eventTitle, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                    Text(if (organizer) ui.eventTitle else "Today", Modifier.weight(1f), style = MaterialTheme.typography.headlineLarge,
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     IconButton({
                         searchOpen = !searchOpen
                         if (!searchOpen) search = ""
                     }) { Icon(if (searchOpen) Icons.Outlined.Close else Icons.Outlined.Search, if (searchOpen) "Close search" else "Search sessions") }
                     IconButton({ dispatch(VentAction.Navigate(VentScreen.PROFILE)) }) {
-                        Image(painterResource(Res.drawable.pass_portrait), "Profile",
-                            Modifier.size(space.xxl).clip(androidx.compose.foundation.shape.CircleShape),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                        Surface(Modifier.size(space.huge), shape = androidx.compose.foundation.shape.CircleShape,
+                            color = scheme.secondaryContainer) {
+                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Person, "Profile") }
+                        }
                     }
                 }
                 if (searchOpen) {
@@ -93,20 +91,23 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
                             } else {
                                 Card(
                                     onClick = { dispatch(VentAction.OpenSession(session)) },
-                                    modifier = Modifier.fillMaxWidth().height(space.heroIcon + space.xxxl).then(sessionShadow),
-                                    shape = MaterialTheme.shapes.extraLarge,
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = space.heroIcon + space.lg),
+                                    shape = MaterialTheme.shapes.large,
                                     colors = sessionColors,
                                     border = sessionBorder,
                                 ) {
                                     Row(Modifier.fillMaxSize().padding(space.lg), verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(space.md)) {
                                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(space.sm)) {
-                                            Text(details.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                                            Text(details.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
                                                 maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                             Text("${details.room} · ${details.speaker}", style = MaterialTheme.typography.bodySmall,
                                                 maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         }
-                                        Icon(Icons.Outlined.ArrowForward, contentDescription = null)
+                                        if (!organizer) IconButton({ dispatch(VentAction.Bookmark(details.title)) }) {
+                                            Icon(if (details.title in ui.bookmarks) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                                                "Save session", tint = if (details.title in ui.bookmarks) scheme.secondary else scheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
                             }
@@ -116,14 +117,18 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
             }
         }
         if (organizer) {
-            FloatingActionButton({ createSession = true }, Modifier.align(Alignment.BottomEnd).padding(space.lg)) {
-                Icon(Icons.Outlined.Add, "Add session")
-            }
+            ExtendedFloatingActionButton(
+                onClick = { createSession = true },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(space.lg),
+                icon = { Icon(Icons.Outlined.Add, null) },
+                text = { Text("New session") },
+            )
         }
     }
     if (createSession && organizer) {
         EditSessionDialog(SessionDetails("", "", "", "", day = pager.currentPage + 1), { createSession = false },
-            creating = true, eventDays = ui.eventDays) {
+            creating = true, eventDays = ui.eventDays,
+            halls = (SummitSession.entries + ui.sessionDetails.keys).map { ui.sessionDetails[it]?.room ?: it.room }.distinct()) {
             dispatch(VentAction.CreateSession(it))
             createSession = false
         }
@@ -150,9 +155,9 @@ internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (I
                     .bringIntoViewRequester(requester)
                     .selectable(selected, role = Role.Tab, onClick = { onSelect(index) })
                     .heightIn(min = space.touch),
-                color = if (selected) scheme.primary else scheme.surface,
-                contentColor = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
-                shape = MaterialTheme.shapes.extraLarge,
+                color = if (selected) scheme.secondary else scheme.surface,
+                contentColor = if (selected) scheme.onSecondary else scheme.onSurfaceVariant,
+                shape = MaterialTheme.shapes.small,
             ) {
                 Box(Modifier.padding(horizontal = space.lg), contentAlignment = Alignment.Center) {
                     Text(label, style = MaterialTheme.typography.labelLarge)
@@ -167,13 +172,13 @@ private fun KeynoteCard(details: SessionDetails, colors: CardColors, border: Bor
     val space = MaterialTheme.spacing
     Card(
         modifier = Modifier.fillMaxWidth().then(shadow),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = MaterialTheme.shapes.large,
         colors = colors,
         border = border,
     ) {
         Column(Modifier.padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.md)) {
             Text("Featured keynote", style = MaterialTheme.typography.labelMedium)
-            Text(details.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(details.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
                 Icon(Icons.Outlined.Schedule, null, Modifier.size(FilterChipDefaults.IconSize))
                 Text(details.time, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -189,7 +194,7 @@ private fun KeynoteCard(details: SessionDetails, colors: CardColors, border: Bor
                 Text(details.speaker, style = MaterialTheme.typography.bodyMedium)
             }
             Button(onOpen, Modifier.fillMaxWidth().heightIn(min = space.action)) {
-                Text("View Details & Check In")
+                Text("View session")
                 Spacer(Modifier.width(space.sm))
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
             }

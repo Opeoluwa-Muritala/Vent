@@ -28,6 +28,7 @@ import app.vent.composeapp.generated.resources.Res
 import app.vent.composeapp.generated.resources.auditorium
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
+import androidx.compose.ui.draw.alpha
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -184,6 +185,7 @@ private fun OccupancyOperations(ui: VentUiState, dispatch: (VentAction) -> Unit)
         OpsHeading(Icons.Outlined.EventSeat, ui.sessionDetails[selected]?.title ?: selected.title, hall(selected))
         Text("Room assignments", style = MaterialTheme.typography.titleSmall)
         LinearProgressIndicator({ ratio }, Modifier.fillMaxWidth())
+        Text("$assigned of $capacity assigned", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
             OccupancyMetric("Usable seats", capacity, Modifier.weight(1f))
             OccupancyMetric("Assigned seats", assigned, Modifier.weight(1f))
@@ -213,7 +215,7 @@ private fun OccupancyOperations(ui: VentUiState, dispatch: (VentAction) -> Unit)
         val seatColor = MaterialTheme.colorScheme.primary
         val availableColor = MaterialTheme.colorScheme.secondaryContainer
         val blockedColor = MaterialTheme.colorScheme.outlineVariant
-        Canvas(Modifier.fillMaxWidth().height(space.heroIcon * 2)) {
+        Canvas(Modifier.fillMaxWidth().height(space.heroIcon * 2).alpha(.6f)) {
             rows.forEachIndexed { row, seats ->
                 seats.seats.forEachIndexed { index, seat ->
                     val x = size.width * (index + 1) / (seats.seats.size + 1)
@@ -236,10 +238,6 @@ private fun OccupancyOperations(ui: VentUiState, dispatch: (VentAction) -> Unit)
         }, Modifier.fillMaxWidth()) { Text("View event map") }
     }
     OpsCard {
-        OpsHeading(Icons.Outlined.WarningAmber, "Anomaly Detection")
-        Text("Live scan and collision alerts are unavailable.")
-    }
-    OpsCard {
         OpsHeading(Icons.Outlined.AssignmentTurnedIn, "End of Session Actions")
         Button({ dispatch(VentAction.Navigate(VentScreen.WRAPPED)) }, Modifier.fillMaxWidth()) { Text("View event recap") }
     }
@@ -249,8 +247,11 @@ private fun OccupancyOperations(ui: VentUiState, dispatch: (VentAction) -> Unit)
 private fun OccupancyMetric(label: String, count: Int, modifier: Modifier) {
     Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.padding(MaterialTheme.spacing.md)) {
+            if (label == "Blocked seats" && count > 0) Icon(Icons.Outlined.WarningAmber, "Blocked seats",
+                tint = MaterialTheme.colorScheme.error)
             Text(label, style = MaterialTheme.typography.labelMedium)
-            Text(count.toString(), style = MaterialTheme.typography.headlineSmall)
+            Text(count.toString(), style = MaterialTheme.typography.headlineSmall,
+                color = if (label == "Blocked seats" && count > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -262,9 +263,15 @@ private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
         OpsHeading(Icons.Outlined.Tune, ui.session.title)
         Text("${ui.session.room} · ${ui.session.time}", style = MaterialTheme.typography.bodySmall)
     }
-    OpsHeading(Icons.Outlined.HowToVote, "Audience Poll Controller")
+    OpsHeading(Icons.Outlined.HowToVote, "Poll control")
     OpsCard {
-        OpsBadge(if (ui.pollPaused) "POLL PAUSED" else "DEMO POLL", emphasized = true)
+        Text("Demo mode. Votes are not saved.", style = MaterialTheme.typography.labelLarge)
+        OpsBadge("Demo", emphasized = false)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+            Icon(if (ui.pollPaused) Icons.Outlined.Pause else Icons.Outlined.Circle, null,
+                tint = MaterialTheme.colorScheme.tertiary)
+            Text(if (ui.pollPaused) "Paused" else "Demo running", color = MaterialTheme.colorScheme.tertiary)
+        }
         Text("Which engineering priority will have the highest impact?", style = MaterialTheme.typography.titleMedium)
         listOf("Agentic workflows" to .42f, "On-device models" to .28f, "Zero-trust infrastructure" to .18f, "Developer tooling" to .12f)
             .forEach { (label, share) ->
@@ -275,7 +282,7 @@ private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
                 LinearProgressIndicator({ share }, Modifier.fillMaxWidth())
             }
         Button({ dispatch(VentAction.TogglePoll) }, Modifier.fillMaxWidth()) {
-            Text(if (ui.pollPaused) "Resume voting" else "Freeze voting")
+            Text(if (ui.pollPaused) "Resume demo" else "Stop demo")
         }
     }
     OpsHeading(Icons.Outlined.Bolt, "Summit Quest & Stage Triggers")
@@ -288,12 +295,21 @@ private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
 private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onSignOut: (() -> Unit)?) {
     val space = MaterialTheme.spacing
     var title by rememberSaveable(ui.eventTitle) { mutableStateOf(ui.eventTitle) }
+    var previewSeed by rememberSaveable(ui.eventAccent) { mutableStateOf(ui.eventAccent) }
+    var previewReady by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(previewSeed) {
+        previewReady = false
+        kotlinx.coroutines.delay(2_000)
+        previewReady = true
+    }
+    VentTheme(accent = previewSeed?.let { Color(it) }) {
+    Column(verticalArrangement = Arrangement.spacedBy(space.md)) {
     OpsCard {
-        OpsHeading(Icons.Outlined.Palette, "Event Configuration & Theme Setup")
+        OpsHeading(Icons.Outlined.Palette, "Event setup")
         Text("Set the event title and preview the event palette.", style = MaterialTheme.typography.bodyMedium)
     }
     OpsCard {
-        OpsHeading(Icons.Outlined.CalendarMonth, "Summit Metadata")
+        OpsHeading(Icons.Outlined.CalendarMonth, "Event details")
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Event title") }, singleLine = true)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Event days", Modifier.weight(1f))
@@ -319,34 +335,48 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onS
         OpsHeading(Icons.Outlined.Palette, "Current theme")
         val scheme = MaterialTheme.colorScheme
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-            listOf("Teal" to null, "Sage" to 0xFFBCCBB0.toInt(), "Lavender" to 0xFFD0C1FF.toInt()).forEach { (name, argb) ->
-                val swatch = argb?.let { Color(it) } ?: app.vent.ui.theme.VentDarkColors.primary
-                FilterChip(
-                    selected = scheme.primary == swatch,
-                    onClick = { dispatch(VentAction.SetEventAccent(argb)) },
-                    label = { Text(name) },
-                    leadingIcon = { Surface(Modifier.size(space.md), shape = MaterialTheme.shapes.extraLarge, color = swatch) {} },
-                )
+            app.vent.domain.EventPalette.seeds.forEach { (name, seed) ->
+                val accents = app.vent.domain.EventPalette.accents(seed, true)
+                OutlinedCard(onClick = { previewSeed = seed },
+                    modifier = Modifier.width(space.touch * 2).heightIn(min = space.touch * 2)) {
+                    Column(Modifier.padding(space.sm), verticalArrangement = Arrangement.spacedBy(space.sm)) {
+                        Text(name, style = MaterialTheme.typography.labelLarge)
+                        Row {
+                            listOf(accents.primary, accents.secondary, accents.tertiary).forEach { color ->
+                                Surface(Modifier.weight(1f).height(space.xxl), color = Color(color)) {}
+                            }
+                        }
+                        if ((previewSeed ?: app.vent.domain.EventPalette.seeds["Lavender"]) == seed) {
+                            Icon(Icons.Outlined.Check, "Selected theme", tint = scheme.secondary)
+                        }
+                    }
+                }
             }
         }
-        PalettePreview(MaterialTheme.colorScheme)
+        Button({ dispatch(VentAction.SetEventAccent(previewSeed)) },
+            Modifier.fillMaxWidth().height(space.action),
+            enabled = previewReady && previewSeed != ui.eventAccent) { Text("Use this theme") }
     }
     OpsCard {
-        OpsHeading(Icons.Outlined.Badge, "Mobile Pass Preview")
+        OpsHeading(Icons.Outlined.Badge, "Pass preview")
         Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium) {
             Column(Modifier.padding(space.lg)) {
                 Text("All-Access Staff Pass", style = MaterialTheme.typography.titleMedium)
                 Text("${title.ifBlank { ui.eventTitle }} · ${ui.activeGate}")
             }
         }
+        Text("This is what attendees see.", style = MaterialTheme.typography.labelLarge)
     }
-    Button({ dispatch(VentAction.RenameEvent(title)) }, Modifier.fillMaxWidth(), enabled = title.isNotBlank() && title.trim() != ui.eventTitle) {
-        Text("Save Event Configuration")
+    if (title.trim() == ui.eventTitle) Text("No changes to save.", style = MaterialTheme.typography.labelLarge)
+    Button({ dispatch(VentAction.RenameEvent(title)) }, Modifier.fillMaxWidth().height(space.action), enabled = title.isNotBlank() && title.trim() != ui.eventTitle) {
+        Text("Save")
     }
     OutlinedButton({ dispatch(VentAction.Navigate(VentScreen.SCHEDULE)) }, Modifier.fillMaxWidth()) {
         Text("Preview Attendee Schedule")
     }
     if (onSignOut != null) TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Sign out") }
+    }
+    }
 }
 
 @Composable
@@ -367,8 +397,6 @@ private fun PaletteSwatch(label: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(space.xs)) {
         Surface(Modifier.size(space.huge), shape = MaterialTheme.shapes.extraLarge, color = color) {}
         Text(label, style = MaterialTheme.typography.labelSmall)
-        Text("#" + (color.toArgb() and 0xFFFFFF).toString(16).padStart(6, '0').uppercase(),
-            style = MaterialTheme.typography.labelSmall)
     }
 }
 

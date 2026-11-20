@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import app.vent.ui.theme.success
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.vent.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.painterResource
@@ -106,17 +108,25 @@ private class ExpiredViewModel : PanelModel()
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
-            CheckInCamera(Modifier.fillMaxSize(), ::submit)
+            Box(Modifier.fillMaxSize()) {
+                CheckInCamera(Modifier.fillMaxSize(), ::submit)
+                Surface(Modifier.align(Alignment.TopCenter).padding(spacing.lg),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Text("Point at the session QR code.", Modifier.padding(spacing.sm))
+                }
+            }
         }
         OutlinedButton({ model.onIntent(PanelIntent.Choose("manual")) }, Modifier.fillMaxWidth()) {
-            Text("Enter code manually")
+            Text("Enter code instead")
         }
     }
     if (state.choice == "manual") AlertDialog(
         onDismissRequest = { model.onIntent(PanelIntent.Choose("")) },
-        title = { Text("Session passcode") },
+        title = { Text("Enter session code") },
         text = { OutlinedTextField(state.input, { model.onIntent(PanelIntent.Edit(it.filter(Char::isDigit).take(6))) },
-            singleLine = true, label = { Text("6-digit code") }, supportingText = { Text("Demo session code: " + ui.session.passcode) }) },
+            singleLine = true, label = { Text("6-digit code") },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+            supportingText = { Text("Ask staff for the session code. Enter the six-digit code.") }) },
         confirmButton = { Button({ submit(state.input) }, enabled = state.input.length == 6) { Text("Check in") } },
         dismissButton = { TextButton({ model.onIntent(PanelIntent.Choose("")) }) { Text("Cancel") } },
     )
@@ -174,23 +184,29 @@ private class ExpiredViewModel : PanelModel()
                     val responses = ui.questResponses[email].orEmpty()
                     if (ui.role == DemoRole.ATTENDEE) {
                     val earned = ui.questDefinitions.filter { it.title in responses }.sumOf { it.points }
-                    Text("$earned points earned", style = MaterialTheme.typography.titleMedium)
-                    Summary("Level 3 Explorer", "185 summit points", "65 points to Level 4")
-                    LinearProgressIndicator(progress = { .74f }, modifier = Modifier.fillMaxWidth())
-                    Text("Daily quests", style = MaterialTheme.typography.titleLarge)
-                    Summary("+30 points", "Both Sessions", "Attend the morning keynote and afternoon deep dive · 1 of 2")
-                    Summary("+15 points", "Opinion Leader", "Vote in three live polls · 2 of 3")
-                    Summary("Claimed · +10 points", "Early Bird", "Checked in before 9:00 AM")
-                    Summary("Badge showcase", "2 of 8 unlocked", "Full House · Voice Tech")
+                    OutlinedCard(Modifier.fillMaxWidth()) {
+                        Text("$earned points", Modifier.padding(space.xxl), style = MaterialTheme.typography.displaySmall)
+                    }
+                    }
+                    if (ui.questDefinitions.isEmpty() && ui.customQuests.isEmpty()) {
+                        Icon(Icons.Outlined.EmojiEvents, null, Modifier.size(space.heroIcon).align(Alignment.CenterHorizontally))
+                        Text("No quests yet", style = MaterialTheme.typography.headlineSmall)
+                        Text("Quests give attendees points for actions, polls, and quizzes.")
+                        if (ui.role == DemoRole.ORGANIZER) Button({ createQuest = true },
+                            Modifier.fillMaxWidth().height(space.action)) { Text("Create your first quest") }
                     }
                     ui.customQuests.forEach { Summary("Conference quest", it, "Available") }
                     ui.questDefinitions.forEach { quest ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(Modifier.fillMaxWidth().heightIn(min = space.heroIcon + space.lg)
+                            .alpha(if (quest.title in responses) .6f else 1f)) {
                             Column(Modifier.padding(space.md), verticalArrangement = Arrangement.spacedBy(space.xs)) {
                                 Text("${quest.kind} · ${quest.points} points", style = MaterialTheme.typography.labelLarge)
                                 Text(quest.title, style = MaterialTheme.typography.titleMedium)
                                 Text(quest.prompt)
-                                if (quest.title in responses) Text("Completed")
+                                if (quest.title in responses) Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.CheckCircle, null, tint = MaterialTheme.colorScheme.success)
+                                    Text("Claimed +${quest.points}", color = MaterialTheme.colorScheme.success)
+                                }
                                 else if (ui.role == DemoRole.ATTENDEE) {
                                     val choices = if (quest.kind == "Action") listOf("Completed") else quest.options
                                     choices.forEach { answer ->
@@ -208,8 +224,8 @@ private class ExpiredViewModel : PanelModel()
                         Column(Modifier.fillMaxWidth().padding(space.xl), verticalArrangement = Arrangement.spacedBy(space.lg)) {
                             Text(ui.eventTitle + " · Wrapped")
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.md)) {
-                                Portrait()
-                                Column { Text("Sarah Jenkins", style = MaterialTheme.typography.headlineSmall); Text("Product Engineering"); Text("Top 5% Summit Contributor", style = MaterialTheme.typography.labelMedium) }
+                                Portrait(email)
+                                Column { Text(email.substringBefore('@'), style = MaterialTheme.typography.headlineSmall); Text("Your summit journey") }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
                                 Tile(Icons.Outlined.EventAvailable, "Sessions", "4", Modifier.weight(1f))
@@ -233,23 +249,24 @@ private class ExpiredViewModel : PanelModel()
                 VentScreen.PROFILE -> {
                     Card {
                         Column(Modifier.fillMaxWidth().padding(space.xl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(space.md)) {
-                            Portrait()
+                            Portrait(email)
                             Text(email, style = MaterialTheme.typography.titleLarge)
                             Text(ui.eventTitle)
-                            Text("All-Access Attendee · Top 5% Contributor", style = MaterialTheme.typography.labelLarge)
+                            Text("All-access attendee", style = MaterialTheme.typography.labelLarge)
                             if (email == "guest@vent.invalid") Image(painterResource(Res.drawable.demo_pass_code), "Demo summit badge",
                                 Modifier.width(space.heroIcon * 2).aspectRatio(185f / 210f))
                         }
                     }
                     Text("Summit Details & Status", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(space.xs)) {
-                        Tile(Icons.Outlined.Chair, "Keynote seat", ui.confirmedSeat, Modifier.weight(1f))
-                        Tile(Icons.Outlined.Bolt, "Summit XP", "205 XP", Modifier.weight(1f))
-                        Tile(Icons.Outlined.FactCheck, "Sessions", "4 / 6", Modifier.weight(1f))
+                        Tile(Icons.Outlined.Chair, "Seat", ui.confirmedSeat.ifBlank { "None" }, Modifier.weight(1f))
+                        Tile(Icons.Outlined.Bolt, "Points", ui.questDefinitions.filter { it.title in ui.questResponses[email].orEmpty() }.sumOf { it.points }.toString(), Modifier.weight(1f))
+                        Tile(Icons.Outlined.FactCheck, "Sessions", ui.seating.values.count { it.checkedIn }.toString(), Modifier.weight(1f))
                     }
-                    Summary("Digital summit pass", if (ui.isCheckedIn) "Checked in" else "Active", "Vegetarian · Hall access level 1")
+                    Summary("Your pass", if (ui.isCheckedIn) "Checked in" else "Active", "All-access")
                     var showPreferences by rememberSaveable { mutableStateOf(false) }
-                    Card(onClick = { showPreferences = true }, modifier = Modifier.fillMaxWidth()) {
+                    var draftPreferences by remember { mutableStateOf(ui.preferences) }
+                    Card(onClick = { draftPreferences = ui.preferences; showPreferences = true }, modifier = Modifier.fillMaxWidth()) {
                         ListItem(headlineContent = { Text("Conference preferences") },
                             supportingContent = { Text("Badge sharing, leaderboard visibility, and reminders") },
                             trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
@@ -265,15 +282,28 @@ private class ExpiredViewModel : PanelModel()
                         Triple("Session reminders", "Remind me about sessions", "Receive reminders for sessions you plan to attend."),
                     ).forEach { (key, label, description) ->
                         ListItem(headlineContent = { Text(label) }, supportingContent = { Text(description) }, trailingContent = {
-                            Switch(key in ui.preferences, { dispatch(VentAction.TogglePreference(key)) })
+                            Switch(key in draftPreferences, {
+                                draftPreferences = if (it) draftPreferences + key else draftPreferences - key
+                            }, colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.secondary,
+                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                            ))
                         })
                     }
                         } },
-                        confirmButton = { TextButton({ showPreferences = false }) { Text("Done") } },
+                        confirmButton = {
+                            Button({
+                                (draftPreferences + ui.preferences).filter {
+                                    (it in draftPreferences) != (it in ui.preferences)
+                                }.forEach { dispatch(VentAction.TogglePreference(it)) }
+                                showPreferences = false
+                            }, Modifier.fillMaxWidth().height(space.action)) { Text("Save") }
+                        },
                     )
-                    Card(onClick = signOut, modifier = Modifier.fillMaxWidth()) {
-                        ListItem(headlineContent = { Text("Sign out") }, leadingContent = { Icon(Icons.Outlined.Logout, null) },
-                            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent))
+                    Spacer(Modifier.height(space.xxl))
+                    TextButton(signOut) {
+                        Icon(Icons.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error)
+                        Text("Sign out", color = MaterialTheme.colorScheme.error)
                     }
                 }
                 VentScreen.PROJECTOR -> {
@@ -315,9 +345,14 @@ private class ExpiredViewModel : PanelModel()
     }
 }
 
-@Composable private fun Portrait() {
-    Image(painterResource(Res.drawable.pass_portrait), null, Modifier.size(MaterialTheme.spacing.heroIcon).clip(CircleShape),
-        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+@Composable private fun Portrait(email: String) {
+    Surface(Modifier.size(MaterialTheme.spacing.heroIcon), shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(email.substringBefore('@').take(2).uppercase().ifBlank { "?" },
+                style = MaterialTheme.typography.headlineLarge)
+        }
+    }
 }
 
 @Composable private fun Tile(icon: ImageVector, label: String, value: String, modifier: Modifier) {

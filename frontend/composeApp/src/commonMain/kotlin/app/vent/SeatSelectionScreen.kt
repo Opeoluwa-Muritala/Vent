@@ -1,6 +1,12 @@
 package app.vent
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,9 +65,28 @@ import androidx.compose.ui.text.font.FontWeight
 import app.vent.ui.theme.spacing
 import kotlin.math.abs
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) -> Unit) {
-    Page(if (uiState.role == DemoRole.ORGANIZER) "Seating" else "Seat navigator") {
+    if (uiState.role == DemoRole.ORGANIZER) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val height = maxHeight
+            androidx.compose.material3.BottomSheetScaffold(
+                sheetPeekHeight = height * .55f,
+                sheetContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                sheetContent = {
+                    SeatDetails(uiState, onAction, Modifier.fillMaxWidth().heightIn(max = height * .9f))
+                },
+            ) {
+                Column(Modifier.fillMaxSize().padding(MaterialTheme.spacing.lg)) {
+                    Text(uiState.session.room, style = MaterialTheme.typography.headlineLarge)
+                    SeatMapPane(uiState, onAction, Modifier.fillMaxWidth().height(height * .4f))
+                }
+            }
+        }
+        return
+    }
+    Page("Your seat") {
         if (uiState.role == DemoRole.ATTENDEE) {
             ListItem(headlineContent = { Text(uiState.session.title) },
                 supportingContent = { Text(uiState.session.room + " · " + uiState.confirmedSeat.ifBlank { "Select a seat" }) },
@@ -91,8 +117,10 @@ internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) ->
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, modifier: Modifier) {
+    var selectionSheet by rememberSaveable { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -110,12 +138,13 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
             FilledTonalButton(onClick = { onAction(VentAction.LocateConfirmedSeat) }) {
                 Icon(Icons.Outlined.MyLocation, contentDescription = null)
                 Spacer(Modifier.width(MaterialTheme.spacing.sm))
-                Text(if (uiState.role == DemoRole.ORGANIZER) "Fit map" else "Find ${uiState.confirmedSeat}")
+                Text(if (uiState.role == DemoRole.ORGANIZER) "Fit map" else "Find my seat")
             }
         }
         VenueMap(
             uiState = uiState,
             onSeatClick = { label ->
+                if (uiState.role == DemoRole.ATTENDEE) selectionSheet = true
                 onAction(
                     if (uiState.role == DemoRole.ORGANIZER) VentAction.ApplySeatEdit(label)
                     else VentAction.SelectSeat(label),
@@ -123,15 +152,33 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
             },
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
+        if (uiState.role == DemoRole.ATTENDEE) SeatLegend()
+    }
+    if (selectionSheet && uiState.role == DemoRole.ATTENDEE) androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = { selectionSheet = false },
+    ) {
+        Column(Modifier.fillMaxWidth().padding(MaterialTheme.spacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.lg)) {
+            Text("Seat ${uiState.selectedSeat}", style = MaterialTheme.typography.titleLarge)
+            Text("Confirm your seat for this session.")
+            Button({ onAction(VentAction.ConfirmSeat); selectionSheet = false },
+                Modifier.fillMaxWidth().height(MaterialTheme.spacing.action),
+                enabled = uiState.seatSelectionOpen && uiState.selectedSeat != uiState.confirmedSeat) {
+                Text("Choose this seat")
+            }
+        }
     }
 }
 
 @Composable
 private fun VenueMap(uiState: VentUiState, onSeatClick: (String) -> Unit, modifier: Modifier = Modifier) {
+    var zoom by rememberSaveable { mutableStateOf(1f) }
+    val transform = rememberTransformableState { scaleChange, _, _ -> zoom = (zoom * scaleChange).coerceIn(1f, 3f) }
     Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.fillMaxSize().clipToBounds().transformable(transform), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(MaterialTheme.spacing.lg),
+                Modifier.verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())
+                    .graphicsLayer { scaleX = zoom; scaleY = zoom }.padding(MaterialTheme.spacing.lg),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
             ) {
@@ -215,7 +262,8 @@ private fun curvedSeatModifier(index: Int, midpoint: Int, curved: Boolean, curve
 private fun SeatControl(seat: VenueSeat, uiState: VentUiState, onSeatClick: (String) -> Unit, modifier: Modifier) {
     val organizer = uiState.role == DemoRole.ORGANIZER
     val available = seat.availability == SeatAvailability.AVAILABLE
-    val selected = !organizer && seat.label == uiState.selectedSeat
+    val selected = !organizer && seat.label == uiState.confirmedSeat
+    val candidate = !organizer && !selected && seat.label == uiState.selectedSeat
     val enabled = organizer || (uiState.seatSelectionOpen && available)
     val state = when {
         selected -> "Selected"
@@ -229,13 +277,14 @@ private fun SeatControl(seat: VenueSeat, uiState: VentUiState, onSeatClick: (Str
         enabled = enabled,
         modifier = modifier.size(MaterialTheme.spacing.touch).padding(MaterialTheme.spacing.xs).semantics {
             role = Role.Button
-            this.selected = selected
+            this.selected = selected || candidate
             stateDescription = "$state, ${seat.type.name.lowercase()} seat"
             if (!enabled) disabled()
         },
         shape = MaterialTheme.shapes.small,
         color = when {
             selected -> MaterialTheme.colorScheme.primary
+            candidate -> MaterialTheme.colorScheme.secondary
             available -> MaterialTheme.colorScheme.surface
             seat.availability == SeatAvailability.RESERVED -> MaterialTheme.colorScheme.tertiaryContainer
             seat.availability == SeatAvailability.BOOKED -> MaterialTheme.colorScheme.surfaceContainerHighest
@@ -243,6 +292,7 @@ private fun SeatControl(seat: VenueSeat, uiState: VentUiState, onSeatClick: (Str
         },
         contentColor = when {
             selected -> MaterialTheme.colorScheme.onPrimary
+            candidate -> MaterialTheme.colorScheme.onSecondary
             seat.availability == SeatAvailability.RESERVED -> MaterialTheme.colorScheme.onTertiaryContainer
             seat.availability == SeatAvailability.BLOCKED -> MaterialTheme.colorScheme.onErrorContainer
             else -> MaterialTheme.colorScheme.onSurface
@@ -250,7 +300,11 @@ private fun SeatControl(seat: VenueSeat, uiState: VentUiState, onSeatClick: (Str
         border = if (selected) null else BorderStroke(MaterialTheme.spacing.xs / 4, MaterialTheme.colorScheme.outline),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(seat.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            when {
+                selected -> Icon(Icons.Outlined.Person, "Your seat ${seat.label}", Modifier.size(MaterialTheme.spacing.xxl))
+                seat.availability == SeatAvailability.BOOKED -> Icon(Icons.Outlined.Lock, "Taken ${seat.label}", Modifier.size(MaterialTheme.spacing.xxl))
+                else -> Text(seat.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
@@ -301,200 +355,106 @@ private fun SeatDetails(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun OrganizerSeatControls(uiState: VentUiState, onAction: (VentAction) -> Unit) {
-    val selectedRow = uiState.venueRows.firstOrNull { it.label == uiState.editingRowLabel }
-    var confirmRowRemoval by rememberSaveable { mutableStateOf(false) }
-    var more by rememberSaveable { mutableStateOf(false) }
-    Text("Edit seating", style = MaterialTheme.typography.titleLarge)
-    Button(
-        onClick = { onAction(VentAction.AutoAssignSeats) },
-        enabled = uiState.attendees.isNotEmpty(),
-    ) { Text("Auto-seat attendees") }
-    val assignments = uiState.seatAssignments[uiState.session].orEmpty()
-    if (assignments.isNotEmpty()) Text("${assignments.size} of ${uiState.attendees.size} attendees assigned")
-    Text("Choose Block or Unblock, then tap a seat on the map.")
-    Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-        listOf(SeatAvailability.BLOCKED to "Block", SeatAvailability.AVAILABLE to "Unblock").forEach { (availability, label) ->
-            FilterChip(uiState.seatEditMode == SeatEditMode.AVAILABILITY && uiState.seatEditAvailability == availability,
-                {
-                    onAction(VentAction.SetSeatEditMode(SeatEditMode.AVAILABILITY))
-                    onAction(VentAction.SetSeatEditAvailability(availability))
-                }, { Text(label) })
+    val space = MaterialTheme.spacing
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var confirmPublish by rememberSaveable { mutableStateOf(false) }
+    var confirmRemoval by rememberSaveable { mutableStateOf(false) }
+    val row = uiState.venueRows.firstOrNull { it.label == uiState.editingRowLabel }
+    val assigned = uiState.seatAssignments[uiState.session].orEmpty()
+    Text(if (uiState.layoutPublication == LayoutPublication.PUBLISHED) "Live: layout published" else "Draft: not published yet",
+        style = MaterialTheme.typography.labelLarge)
+    VentPillTabs(listOf("Seats", "Rows", "Publish"), tab) { tab = it }
+    when (tab) {
+        0 -> {
+            Text("Seat type and availability", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+                SeatType.entries.forEach { type ->
+                    FilterChip(uiState.seatEditMode == SeatEditMode.TYPE && uiState.seatEditType == type,
+                        { onAction(VentAction.SetSeatEditMode(SeatEditMode.TYPE)); onAction(VentAction.SetSeatEditType(type)) },
+                        { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                }
+            }
+            Text("Select a type, then tap seats on the map.")
+        }
+        1 -> {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+                uiState.venueRows.forEach { option ->
+                    FilterChip(option.label == uiState.editingRowLabel,
+                        { onAction(VentAction.SelectEditingRow(option.label)) }, { Text("Row ${option.label}") })
+                }
+            }
+            row?.let {
+                val index = uiState.venueRows.indexOf(row)
+                val protected = assigned.values.toSet() + uiState.confirmedSeat
+                Text("Row ${row.label}, ${row.seats.size} seats, ${row.seats.firstOrNull()?.tier?.name?.lowercase().orEmpty()}",
+                    style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+                    OutlinedButton({ onAction(VentAction.AddSeatToRow) }, Modifier.weight(1f),
+                        enabled = row.seats.size < MAX_SEATS_PER_ROW) { Text("Add seat") }
+                    OutlinedButton({ onAction(VentAction.RemoveSeatFromRow) }, Modifier.weight(1f),
+                        enabled = row.seats.size > MIN_SEATS_PER_ROW && row.seats.last().label !in protected) { Text("Remove seat") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+                    OutlinedButton({ onAction(VentAction.MoveEditingRow(-1)) }, Modifier.weight(1f), enabled = index > 0) { Text("Move up") }
+                    OutlinedButton({ onAction(VentAction.MoveEditingRow(1)) }, Modifier.weight(1f),
+                        enabled = index < uiState.venueRows.lastIndex) { Text("Move down") }
+                }
+                if (index == 0) Text("Row ${row.label} is at the top.", style = MaterialTheme.typography.labelLarge)
+                OutlinedButton({ onAction(VentAction.ToggleEditingRowTier) }) { Text("Change row type") }
+                OutlinedButton({ onAction(VentAction.AddSeatRow) }, enabled = uiState.venueRows.size < MAX_VENUE_ROWS) { Text("Add row") }
+                Spacer(Modifier.height(space.xxl))
+                TextButton({ confirmRemoval = true },
+                    enabled = uiState.venueRows.size > 1 && row.seats.none { it.label in protected }) {
+                    Icon(Icons.Outlined.DeleteOutline, null, tint = MaterialTheme.colorScheme.error)
+                    Text("Remove row", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+        2 -> {
+            Button({ onAction(VentAction.AutoAssignSeats) }, Modifier.fillMaxWidth().height(space.action),
+                enabled = uiState.attendees.isNotEmpty()) { Text("Auto-seat attendees") }
+            Text("${assigned.size} of ${uiState.attendees.size} attendees assigned")
+            androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(SeatAvailability.BLOCKED to "Block", SeatAvailability.AVAILABLE to "Unblock").forEachIndexed { index, (availability, label) ->
+                    SegmentedButton(
+                        selected = uiState.seatEditMode == SeatEditMode.AVAILABILITY && uiState.seatEditAvailability == availability,
+                        onClick = { onAction(VentAction.SetSeatEditMode(SeatEditMode.AVAILABILITY)); onAction(VentAction.SetSeatEditAvailability(availability)) },
+                        shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index, 2),
+                    ) { Text(label) }
+                }
+            }
+            Text("Choose a mode, then tap seats on the map.")
+            Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+                SeatLayoutMode.entries.forEach { layout ->
+                    FilterChip(uiState.seatLayoutMode == layout, { onAction(VentAction.SetSeatLayout(layout)) },
+                        { Text(layout.name.lowercase()) })
+                }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Attendee seat changes", Modifier.weight(1f))
+                Switch(uiState.seatSelectionOpen, { onAction(VentAction.SetSeatSelectionOpen(it)) })
+            }
+            OutlinedButton({ onAction(VentAction.SaveLayoutDraft) }, Modifier.fillMaxWidth().height(space.action)) { Text("Save draft") }
+            Button({ confirmPublish = true }, Modifier.fillMaxWidth().height(space.action)) { Text("Publish layout") }
         }
     }
-    TextButton({ more = !more }) { Text(if (more) "Fewer options" else "More options") }
-    if (more) {
-    Text(
-        "Choose what to edit, select a value, then tap chairs to apply it.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    if (confirmPublish) AlertDialog(
+        onDismissRequest = { confirmPublish = false },
+        title = { Text("Publish layout?") },
+        text = { Text("${uiState.attendees.size} attendees will see the published seating layout.") },
+        confirmButton = { Button({ confirmPublish = false; onAction(VentAction.PublishLayout) }) { Text("Publish layout") } },
+        dismissButton = { TextButton({ confirmPublish = false }) { Text("Cancel") } },
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-        SeatEditMode.entries.forEach { mode ->
-            FilterChip(
-                selected = uiState.seatEditMode == mode,
-                onClick = { onAction(VentAction.SetSeatEditMode(mode)) },
-                label = { Text(if (mode == SeatEditMode.TYPE) "Seat type" else "Availability") },
-            )
-        }
-    }
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
-    ) {
-        if (uiState.seatEditMode == SeatEditMode.TYPE) {
-            SeatType.entries.forEach { type ->
-                FilterChip(
-                    selected = uiState.seatEditType == type,
-                    onClick = { onAction(VentAction.SetSeatEditType(type)) },
-                    label = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                )
-            }
-        } else {
-            SeatAvailability.entries.forEach { availability ->
-                FilterChip(
-                    selected = uiState.seatEditAvailability == availability,
-                    onClick = { onAction(VentAction.SetSeatEditAvailability(availability)) },
-                    label = { Text(availability.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                )
-            }
-        }
-    }
-    Text("Room layout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-        SeatLayoutMode.entries.forEach { mode ->
-            FilterChip(
-                selected = uiState.seatLayoutMode == mode,
-                onClick = { onAction(VentAction.SetSeatLayout(mode)) },
-                label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
-            )
-        }
-    }
-    HorizontalDivider()
-    Text("Edit row", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
-    ) {
-        uiState.venueRows.forEachIndexed { index, row ->
-            FilterChip(
-                selected = row.label == uiState.editingRowLabel,
-                onClick = { onAction(VentAction.SelectEditingRow(row.label)) },
-                label = { Text("Row ${('A'.code + index).toChar()}") },
-            )
-        }
-    }
-    selectedRow?.let { row ->
-        val rowIndex = uiState.venueRows.indexOf(row)
-        val protectedSeats = assignments.values.toSet() + uiState.confirmedSeat
-        val canRemoveSeat = row.seats.size > MIN_SEATS_PER_ROW && row.seats.last().label !in protectedSeats
-        val canRemoveRow = uiState.venueRows.size > 1 && row.seats.none { it.label in protectedSeats }
-        Text(
-            "Row ${row.label} · ${row.seats.size} seats · ${(row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD).name.lowercase()}",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-            FilledTonalButton(
-                onClick = { onAction(VentAction.RemoveSeatFromRow) },
-                enabled = canRemoveSeat,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Outlined.Remove, contentDescription = null)
-                Spacer(Modifier.width(MaterialTheme.spacing.sm))
-                Text("Remove seat")
-            }
-            FilledTonalButton(
-                onClick = { onAction(VentAction.AddSeatToRow) },
-                enabled = row.seats.size < MAX_SEATS_PER_ROW,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Outlined.Add, contentDescription = null)
-                Spacer(Modifier.width(MaterialTheme.spacing.sm))
-                Text("Add seat")
-            }
-        }
-        FilledTonalButton(onClick = { onAction(VentAction.ToggleEditingRowTier) }, modifier = Modifier.fillMaxWidth()) {
-            Text(if ((row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD) == SeatTier.VIP) "Change to standard" else "Change to VIP")
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-            OutlinedButton(
-                onClick = { onAction(VentAction.MoveEditingRow(-1)) },
-                enabled = rowIndex > 0,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Outlined.ArrowUpward, contentDescription = null)
-                Spacer(Modifier.width(MaterialTheme.spacing.sm))
-                Text("Move up")
-            }
-            OutlinedButton(
-                onClick = { onAction(VentAction.MoveEditingRow(1)) },
-                enabled = rowIndex < uiState.venueRows.lastIndex,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Outlined.ArrowDownward, contentDescription = null)
-                Spacer(Modifier.width(MaterialTheme.spacing.sm))
-                Text("Move down")
-            }
-        }
-        TextButton(onClick = { confirmRowRemoval = true }, enabled = canRemoveRow, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.width(MaterialTheme.spacing.sm))
-            Text("Remove row", color = MaterialTheme.colorScheme.error)
-        }
-        if (confirmRowRemoval) {
-            AlertDialog(
-                onDismissRequest = { confirmRowRemoval = false },
-                title = { Text("Remove row ${row.label}?") },
-                text = { Text("This removes ${row.seats.size} seats from the draft layout.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        confirmRowRemoval = false
-                        onAction(VentAction.RemoveEditingRow)
-                    }) { Text("Remove row") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmRowRemoval = false }) { Text("Cancel") }
-                },
-            )
-        }
-    }
-    FilledTonalButton(
-        onClick = { onAction(VentAction.AddSeatRow) },
-        enabled = uiState.venueRows.size < MAX_VENUE_ROWS,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Icon(Icons.Outlined.Add, contentDescription = null)
-        Spacer(Modifier.width(MaterialTheme.spacing.sm))
-        Text("Add seat row")
-    }
-    HorizontalDivider()
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("Attendee selection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(
-                if (uiState.seatSelectionOpen) "Attendees can change seats" else "Attendee seat changes are closed",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(
-            checked = uiState.seatSelectionOpen,
-            onCheckedChange = { onAction(VentAction.SetSeatSelectionOpen(it)) },
-        )
-    }
-    }
-    Text(
-        if (uiState.layoutPublication == LayoutPublication.PUBLISHED) "Published layout" else "Unpublished changes",
-        style = MaterialTheme.typography.labelLarge,
-        color = if (uiState.layoutPublication == LayoutPublication.PUBLISHED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+    if (confirmRemoval && row != null) AlertDialog(
+        onDismissRequest = { confirmRemoval = false },
+        title = { Text("Remove row ${row.label}?") },
+        text = { Text("This removes ${row.seats.size} seats from the draft layout.") },
+        confirmButton = { TextButton({ confirmRemoval = false; onAction(VentAction.RemoveEditingRow) }) { Text("Remove row", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton({ confirmRemoval = false }) { Text("Cancel") } },
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-        OutlinedButton(onClick = { onAction(VentAction.SaveLayoutDraft) }, modifier = Modifier.weight(1f)) {
-            Text("Save draft")
-        }
-        Button(onClick = { onAction(VentAction.PublishLayout) }, modifier = Modifier.weight(1f)) {
-            Text("Publish layout")
-        }
-    }
 }
 
 @Composable
