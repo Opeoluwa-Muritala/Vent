@@ -15,6 +15,10 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +33,9 @@ import androidx.compose.material.icons.outlined.MarkEmailRead
 import app.vent.ui.theme.heroTint
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.ViewModel
@@ -232,8 +239,10 @@ internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifie
     Scaffold(topBar = { Box(Modifier.safeDrawingPadding().padding(top = spacing.lg)) {
         IconButton(onBack, Modifier.minimumInteractiveComponentSize()) { Icon(Icons.Outlined.ArrowBack, "Change email") }
     } }) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).imePadding().padding(horizontal = spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.lg)) {
-            Spacer(Modifier.weight(1f))
+        Column(Modifier.fillMaxSize().padding(insets).imePadding().verticalScroll(rememberScrollState())
+            .padding(horizontal = spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(spacing.lg)) {
+            Spacer(Modifier.height(spacing.xxl))
             Surface(Modifier.size(spacing.heroIcon), shape = CircleShape,
                 border = BorderStroke(spacing.xs / 4, MaterialTheme.colorScheme.tertiary)) {
                 Box(contentAlignment = Alignment.Center) {
@@ -247,9 +256,7 @@ internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifie
                 else "If ${state.email} is registered, we sent a 6-digit code. It expires in 10 minutes.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            BasicTextField(value = state.code, onValueChange = onCode, enabled = !state.loading, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done), modifier = Modifier.semantics { contentDescription = "Six digit sign-in code" }, decorationBox = { inner ->
-                Box { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.xs)) { repeat(6) { index -> OutlinedCard(Modifier.weight(1f).height(spacing.touch), border = BorderStroke(spacing.xs, if (state.error == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(state.code.getOrNull(index)?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge) } } } }; Box(Modifier.size(spacing.none)) { inner() } }
-            })
+            SignInCodeField(state.code, onCode, enabled = !state.loading, isError = state.error != null)
             state.error?.let { ErrorText(it) }
             Button(onVerify, Modifier.fillMaxWidth().height(spacing.action), enabled = state.code.length == 6 && !state.loading) { if (state.loading) CircularProgressIndicator(Modifier.size(spacing.xl), strokeWidth = spacing.xs) else Text("Verify") }
             if (state.code.length < 6) Text("Enter all six digits to continue.",
@@ -258,9 +265,51 @@ internal fun VentMark(ink: androidx.compose.ui.graphics.Color, modifier: Modifie
                 TextButton(onResend, enabled = !state.loading && state.resendSeconds == 0) { Text(if (state.resendSeconds > 0) "Resend code in 0:${state.resendSeconds.toString().padStart(2, '0')}" else "Send a new code") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) { Text("Wrong email?"); TextButton(onBack) { Text("Change it") } }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(spacing.xxl))
         }
     }
+}
+
+@Composable
+private fun SignInCodeField(value: String, onValueChange: (String) -> Unit, enabled: Boolean, isError: Boolean) {
+    val spacing = MaterialTheme.spacing
+    val scheme = MaterialTheme.colorScheme
+    var focused by remember { mutableStateOf(false) }
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+        modifier = Modifier.widthIn(max = spacing.compactBreakpoint).fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .semantics { contentDescription = "Six digit sign-in code" },
+        decorationBox = { inner ->
+            Box {
+                Row(Modifier.fillMaxWidth().clearAndSetSemantics {},
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    repeat(6) { index ->
+                        val active = focused && index == value.length.coerceAtMost(5)
+                        Surface(
+                            Modifier.weight(1f).height(spacing.touch),
+                            shape = MaterialTheme.shapes.small,
+                            color = if (active) scheme.secondary.copy(alpha = .12f) else scheme.surface,
+                            border = BorderStroke(spacing.xs / 4, when {
+                                isError -> scheme.error
+                                active -> scheme.secondary
+                                else -> scheme.outline
+                            }),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(value.getOrNull(index)?.toString().orEmpty(), style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.matchParentSize().alpha(0f)) { inner() }
+            }
+        },
+    )
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)

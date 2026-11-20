@@ -14,6 +14,8 @@ precedence over the earlier TechCon splash name.
 - Shared Vector Drawable icon resources and resource mapping for all platforms.
 - Poster login with a matching tinted card, six-digit code entry treatment,
   disabled-action explanations, and removal of the attendee-facing demo code.
+- Code entry scrolls above the keyboard and shows one focused digit box in
+  secondary tint with 8dp box spacing and 1dp outlines.
 - Flat schedule cards, secondary day selection, bookmarks, labeled navigation,
   session hero layout, and a labeled New session FAB.
 - Session creation sheet with time validation, speaker chips, image placeholder,
