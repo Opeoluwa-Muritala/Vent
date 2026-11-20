@@ -28,3 +28,12 @@ with -0.5 units letter spacing. Font source:
 https://github.com/google/fonts/tree/main/ofl/inter
 The original font license is preserved in `licenses/Inter-OFL.txt`.
 The rendered wordmark contains paths and does not require a font installation.
+
+## Browser QR decoder
+
+jsQR 1.4.0 is vendored unchanged from the published package distribution:
+https://www.jsdelivr.com/package/npm/jsqr
+Upstream: https://github.com/cozmo/jsQR
+Its Apache-2.0 license is distributed alongside `vendor/jsqr.js` as
+`vendor/jsqr-LICENSE.txt`. Camera frames remain local to the browser;
+no decoder request or camera frame is sent to a third-party server.

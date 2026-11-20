@@ -58,6 +58,10 @@ This is not a claim of full completion of all 37 screen states.
 - Android camera torch control uses the device's actual torch state, handles
   missing flash hardware and failed requests, and turns off on disposal.
   Camera permission is rechecked when returning from system settings.
+- Web camera scanning uses secure-context media access, native barcode
+  detection with a locally vendored jsQR fallback, device torch capability
+  checks, and full stream cleanup. Browser permission denial keeps manual entry
+  available and explains how to restore site camera access.
 - Seat maps now use a cached bitmap for stage and venue labels with a separate
   Canvas seat layer. Zoom preserves the gesture centroid, hit testing resolves
   the nearest seat within a 22dp radius, and Find my seat centers the confirmed

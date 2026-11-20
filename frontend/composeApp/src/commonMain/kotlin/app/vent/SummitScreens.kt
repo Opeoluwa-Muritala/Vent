@@ -92,32 +92,27 @@ private class ExpiredViewModel : PanelModel()
         dispatch(VentAction.Navigate(result))
     }
     val spacing = MaterialTheme.spacing
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(spacing.md)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ dispatch(VentAction.Navigate(VentScreen.SCHEDULE)) }) {
-                Icon(Icons.Outlined.ArrowBack, "Back to sessions")
-            }
-            Text("Check in", style = MaterialTheme.typography.titleLarge)
-        }
-        Text(ui.session.title)
-        if (state.choice == "manual") Spacer(Modifier.weight(1f))
-        else Surface(
-            modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = spacing.compactBreakpoint)
-                .fillMaxWidth().weight(1f),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Box(Modifier.fillMaxSize()) {
-                CheckInCamera(Modifier.fillMaxSize(), ::submit)
-                Surface(Modifier.align(Alignment.TopCenter).padding(spacing.lg),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Text("Point at the session QR code.", Modifier.padding(spacing.sm))
+    Box(Modifier.fillMaxSize()) {
+        if (state.choice != "manual") CheckInCamera(
+            Modifier.fillMaxSize(), ::submit,
+            onClose = { dispatch(VentAction.Navigate(VentScreen.SCHEDULE)) },
+            onManual = { model.onIntent(PanelIntent.Choose("manual")) },
+        )
+        Surface(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(spacing.lg),
+            shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .9f)) {
+            Column(Modifier.padding(spacing.sm)) {
+                TextButton({ dispatch(VentAction.Navigate(VentScreen.SCHEDULE)) }) {
+                    Icon(Icons.Outlined.ArrowBack, null)
+                    Text("Back")
                 }
+                Text("Point at the session QR code.", style = MaterialTheme.typography.bodyLarge)
+                Text(ui.sessionDetails[ui.session]?.title ?: ui.session.title, style = MaterialTheme.typography.labelLarge)
             }
         }
-        OutlinedButton({ model.onIntent(PanelIntent.Choose("manual")) }, Modifier.fillMaxWidth()) {
-            Text("Enter code instead")
+        Surface(Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(spacing.lg),
+            shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            TextButton({ model.onIntent(PanelIntent.Choose("manual")) },
+                Modifier.heightIn(min = spacing.touch)) { Text("Enter code instead") }
         }
     }
     if (state.choice == "manual") AlertDialog(

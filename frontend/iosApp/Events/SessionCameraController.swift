@@ -46,7 +46,7 @@ final class SessionCameraController: UIViewController, AVCaptureMetadataOutputOb
             message.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             torch.widthAnchor.constraint(equalToConstant: 48),
             torch.heightAnchor.constraint(equalToConstant: 48),
-            torch.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            torch.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
             torch.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             settings.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             settings.centerYAnchor.constraint(equalTo: view.centerYAnchor),

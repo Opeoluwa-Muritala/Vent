@@ -15,7 +15,7 @@ object IosCameraBridge {
 }
 
 @Composable
-internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit) {
+internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit, onClose: () -> Unit, onManual: () -> Unit) {
     val factory = IosCameraBridge.factory
     if (factory != null) UIKitViewController(factory = { factory(onCode) }, modifier = modifier)
     else Box(modifier, contentAlignment = Alignment.Center) { Text("Camera unavailable. Enter the check-in code manually.") }

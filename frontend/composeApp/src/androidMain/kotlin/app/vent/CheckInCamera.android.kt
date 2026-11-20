@@ -43,7 +43,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 
 @Composable
-internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit) {
+internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit, onClose: () -> Unit, onManual: () -> Unit) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -155,7 +155,7 @@ internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit) 
                 }
             }
         }
-        Surface(Modifier.align(Alignment.BottomCenter).padding(spacing.lg),
+        Surface(Modifier.align(Alignment.BottomStart).padding(spacing.lg),
             shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Column(Modifier.padding(spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
                 IconToggleButton(
