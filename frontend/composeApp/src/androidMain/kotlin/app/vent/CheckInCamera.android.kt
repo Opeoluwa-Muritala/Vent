@@ -100,7 +100,11 @@ internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit, 
             ) { result ->
                 if (!delivered) {
                     val code = result.getValue(scanner)?.firstNotNullOfOrNull { barcode ->
-                        barcode.rawValue?.trim()?.takeIf { it.length == 6 && it.all { digit -> digit in '0'..'9' } }
+                        barcode.rawValue?.trim()?.takeIf { value ->
+                            (value.length == 6 && value.all { it in '0'..'9' }) ||
+                                (value.length <= 4096 && value.split('.').size == 3 &&
+                                    value.all { it.isLetterOrDigit() || it in "._-" })
+                        }
                     }
                     if (code != null) {
                         delivered = true

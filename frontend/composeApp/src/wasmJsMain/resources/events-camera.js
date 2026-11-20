@@ -130,8 +130,10 @@
                             message.textContent = "QR scanning is unavailable in this browser. Enter the code instead.";
                         }
                         if (active !== generation) return;
-                        if (/^[0-9]{6}$/.test(value.trim())) {
-                            pending = value.trim();
+                        const candidate = value.trim();
+                        if (/^[0-9]{6}$/.test(candidate) ||
+                            (candidate.length <= 4096 && candidate.split(".").length === 3 && /^[A-Za-z0-9_.-]+$/.test(candidate))) {
+                            pending = candidate;
                             return;
                         }
                     } catch (_) {

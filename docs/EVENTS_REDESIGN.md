@@ -53,6 +53,8 @@ This is not a claim of full completion of all 37 screen states.
   Pass issuance now checks event membership, returns a short-lived signed token,
   and provides an event-scoped staff verification endpoint. QRose renders the
   QR in shared Compose code. Tokens stay in memory and refresh every five minutes.
+  Door scanning verifies signed admission payloads against the selected event;
+  failed or offline verification never displays an accepted pass.
   Show to staff temporarily raises Android/iOS brightness and restores it when
   dismissed. Web requests fullscreen because browsers cannot set hardware brightness.
 - Android camera torch control uses the device's actual torch state, handles

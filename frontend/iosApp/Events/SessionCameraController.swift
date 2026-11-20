@@ -149,7 +149,12 @@ final class SessionCameraController: UIViewController, AVCaptureMetadataOutputOb
         from connection: AVCaptureConnection) {
         guard !delivered,
               let code = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue,
-              code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { return }
+              code.count <= 4096 else { return }
+        let digits = code.count == 6 && code.utf8.allSatisfy { (48...57).contains($0) }
+        let signed = code.split(separator: ".").count == 3 && code.utf8.allSatisfy {
+            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [45, 46, 95].contains($0)
+        }
+        guard digits || signed else { return }
         delivered = true
         stopCamera()
         onCode(code)

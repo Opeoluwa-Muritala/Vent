@@ -120,6 +120,30 @@ private fun DoorOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     var showGates by rememberSaveable { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
     var scanReceived by rememberSaveable { mutableStateOf(false) }
+    var manualPass by rememberSaveable { mutableStateOf(false) }
+    var token by remember { mutableStateOf("") }
+    var verifying by remember { mutableStateOf(false) }
+    var verified by remember { mutableStateOf<Boolean?>(null) }
+    val verifier = LocalPassVerifier.current
+    val scope = rememberCoroutineScope()
+    fun verifyPass(code: String) {
+        if (verifying) return
+        scanReceived = true
+        verifying = true
+        verified = null
+        scope.launch {
+            try {
+                checkNotNull(verifier).verify(code)
+                verified = true
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                verified = false
+            } finally {
+                verifying = false
+            }
+        }
+    }
     OpsCard {
         OpsHeading(Icons.Outlined.MeetingRoom, "Current gate")
         Text("${ui.session.room} · ${ui.activeGate}", style = MaterialTheme.typography.titleLarge)
@@ -128,13 +152,23 @@ private fun DoorOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
         color = MaterialTheme.colorScheme.inverseSurface, contentColor = MaterialTheme.colorScheme.inverseOnSurface) {
         if (scanReceived) {
             Column(Modifier.padding(space.lg), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Code read. Staff verification unavailable.")
+                if (verifying) {
+                    CircularProgressIndicator()
+                    Text("Verifying pass…")
+                } else {
+                    Icon(if (verified == true) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                        null, tint = if (verified == true) MaterialTheme.colorScheme.success else MaterialTheme.colorScheme.error)
+                    Text(if (verified == true) "Pass verified for this event"
+                        else "Pass not verified. It may be invalid, expired, or unavailable offline.")
+                }
                 TextButton({ scanReceived = false }) { Text("Scan another code") }
             }
         } else if (LocalInspectionMode.current) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Align QR code") }
         } else {
-            CheckInCamera(Modifier.fillMaxSize()) { scanReceived = true }
+            CheckInCamera(Modifier.fillMaxSize(), onCode = ::verifyPass,
+                onClose = { dispatch(VentAction.Navigate(VentScreen.ORGANIZER)) },
+                onManual = { scanReceived = true; verified = null; manualPass = true })
         }
     }
     OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), singleLine = true,
@@ -149,6 +183,15 @@ private fun DoorOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     OpsHeading(Icons.Outlined.History, "Recent Door Scans")
     OpsCard { Text("No staff scan history is available.") }
     OutlinedButton({ showGates = true }, Modifier.fillMaxWidth()) { Text("Switch gate") }
+    OutlinedButton({ scanReceived = true; verified = null; manualPass = true }, Modifier.fillMaxWidth()) { Text("Enter pass code") }
+    if (manualPass) AlertDialog(
+        onDismissRequest = { manualPass = false },
+        title = { Text("Verify event pass") },
+        text = { OutlinedTextField(token, { token = it.take(4096) }, label = { Text("Signed pass code") }) },
+        confirmButton = { Button({ manualPass = false; verifyPass(token); token = "" },
+            enabled = token.isNotBlank() && !verifying) { Text("Verify pass") } },
+        dismissButton = { TextButton({ manualPass = false }) { Text("Cancel") } },
+    )
     if (showGates) AlertDialog(
         onDismissRequest = { showGates = false },
         title = { Text("Select gate") },

@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 class SignInCodeRejected(val code: String) : RuntimeException()
 
 interface VentApi {
+    suspend fun verifyEventPass(eventId: String, token: String): VerifiedPassDto = error("Pass verification is unavailable")
     suspend fun attendeePass(eventId: String): AttendeePassDto = error("Pass issuance is unavailable")
     suspend fun loadPreferences(): UserPreferencesDto = error("Preference sync is unavailable")
     suspend fun savePreferences(preferences: UserPreferencesDto): Unit = error("Preference sync is unavailable")
@@ -38,6 +39,18 @@ interface VentApi {
 }
 
 class VentApiClient(private val baseUrl: String, private val client: HttpClient = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false }) } }) : VentApi {
+    override suspend fun verifyEventPass(eventId: String, token: String): VerifiedPassDto {
+        require(eventId.matches(Regex("[0-9a-fA-F-]{36}")) && token.length in 1..4096)
+        val response = withSession { accessToken ->
+            client.post("$baseUrl/api/v1/events/$eventId/passes/verify") {
+                bearerAuth(accessToken)
+                contentType(ContentType.Application.Json)
+                setBody(VerifyPassRequest(token))
+            }
+        }
+        check(response.status.isSuccess()) { "Pass verification failed" }
+        return response.body()
+    }
     override suspend fun attendeePass(eventId: String): AttendeePassDto =
         authorizedGet("/api/v1/events/${eventId.also { require(it.matches(Regex("[0-9a-fA-F-]{36}"))) }}/pass")
     override suspend fun loadPreferences(): UserPreferencesDto = authorizedGet("/api/v1/me/preferences")
