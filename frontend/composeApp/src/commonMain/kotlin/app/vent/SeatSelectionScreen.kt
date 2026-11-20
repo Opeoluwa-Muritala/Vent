@@ -121,6 +121,7 @@ internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) ->
 @Composable
 private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, modifier: Modifier) {
     var selectionSheet by rememberSaveable { mutableStateOf(false) }
+    var locateRequest by rememberSaveable { mutableStateOf(0) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -135,14 +136,15 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FilledTonalButton(onClick = { onAction(VentAction.LocateConfirmedSeat) }) {
+            FilledTonalButton(onClick = { locateRequest++; onAction(VentAction.LocateConfirmedSeat) }) {
                 Icon(Icons.Outlined.MyLocation, contentDescription = null)
                 Spacer(Modifier.width(MaterialTheme.spacing.sm))
                 Text(if (uiState.role == DemoRole.ORGANIZER) "Fit map" else "Find my seat")
             }
         }
-        VenueMap(
-            uiState = uiState,
+        CanvasVenueMap(
+            ui = uiState,
+            locateRequest = locateRequest,
             onSeatClick = { label ->
                 if (uiState.role == DemoRole.ATTENDEE) selectionSheet = true
                 onAction(
@@ -170,156 +172,6 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
     }
 }
 
-@Composable
-private fun VenueMap(uiState: VentUiState, onSeatClick: (String) -> Unit, modifier: Modifier = Modifier) {
-    var zoom by rememberSaveable { mutableStateOf(1f) }
-    val transform = rememberTransformableState { scaleChange, _, _ -> zoom = (zoom * scaleChange).coerceIn(1f, 3f) }
-    Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Box(Modifier.fillMaxSize().clipToBounds().transformable(transform), contentAlignment = Alignment.TopCenter) {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())
-                    .graphicsLayer { scaleX = zoom; scaleY = zoom }.padding(MaterialTheme.spacing.lg),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
-            ) {
-                Surface(
-                    modifier = Modifier.width(MaterialTheme.spacing.giant * 8).heightIn(min = MaterialTheme.spacing.touch),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.secondary,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("STAGE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondary)
-                    }
-                }
-                var previousTier: SeatTier? = null
-                uiState.venueRows.forEach { row ->
-                    val tier = (row.seats.firstOrNull()?.tier ?: SeatTier.STANDARD)
-                    if (tier != previousTier) SectionLabel(
-                        if (tier == SeatTier.VIP) "VIP section" else "Standard section",
-                        tier == SeatTier.VIP,
-                    )
-                    SeatRow(row, uiState, onSeatClick)
-                    previousTier = tier
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    VenueMarker("Entrance")
-                    VenueMarker("Exit")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String, vip: Boolean) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = if (vip) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
-private fun SeatRow(row: VenueRow, uiState: VentUiState, onSeatClick: (String) -> Unit) {
-    val displayLetter = ('A'.code + uiState.venueRows.indexOf(row)).toChar().toString()
-    val midpoint = row.seats.size / 2
-    val assignedSeats = uiState.seatAssignments[uiState.session].orEmpty().values.toSet()
-    val seats = row.seats.map { seat ->
-        if (seat.label in assignedSeats && seat.availability != SeatAvailability.BLOCKED) {
-            seat.copy(availability = SeatAvailability.BOOKED)
-        } else seat
-    }
-    val curved = uiState.seatLayoutMode == SeatLayoutMode.CURVED
-    val density = LocalDensity.current
-    val curveStep = with(density) { MaterialTheme.spacing.sm.toPx() }
-    Row(
-        modifier = Modifier.height(if (curved) MaterialTheme.spacing.touch + MaterialTheme.spacing.xxl else MaterialTheme.spacing.touch),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(displayLetter, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(MaterialTheme.spacing.touch).padding(top = MaterialTheme.spacing.lg))
-        seats.take(midpoint).forEachIndexed { index, seat ->
-            SeatControl(seat, uiState, onSeatClick, curvedSeatModifier(index, midpoint, curved, curveStep))
-        }
-        Spacer(Modifier.width(MaterialTheme.spacing.touch))
-        seats.drop(midpoint).forEachIndexed { index, seat ->
-            SeatControl(seat, uiState, onSeatClick, curvedSeatModifier(index + midpoint, midpoint, curved, curveStep))
-        }
-        Text(displayLetter, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(MaterialTheme.spacing.touch).padding(top = MaterialTheme.spacing.lg))
-    }
-}
-
-private fun curvedSeatModifier(index: Int, midpoint: Int, curved: Boolean, curveStep: Float): Modifier {
-    if (!curved) return Modifier
-    val distance = abs(index - (midpoint - 0.5f))
-    return Modifier.graphicsLayer {
-        translationY = (midpoint - distance).coerceAtLeast(0f) * curveStep
-        rotationZ = (midpoint - 0.5f - index) * 4f
-    }
-}
-
-@Composable
-private fun SeatControl(seat: VenueSeat, uiState: VentUiState, onSeatClick: (String) -> Unit, modifier: Modifier) {
-    val organizer = uiState.role == DemoRole.ORGANIZER
-    val available = seat.availability == SeatAvailability.AVAILABLE
-    val selected = !organizer && seat.label == uiState.confirmedSeat
-    val candidate = !organizer && !selected && seat.label == uiState.selectedSeat
-    val enabled = organizer || (uiState.seatSelectionOpen && available)
-    val state = when {
-        selected -> "Selected"
-        available -> "Available"
-        seat.availability == SeatAvailability.RESERVED -> "Reserved"
-        seat.availability == SeatAvailability.BOOKED -> "Booked"
-        else -> "Blocked"
-    }
-    Surface(
-        onClick = { onSeatClick(seat.label) },
-        enabled = enabled,
-        modifier = modifier.size(MaterialTheme.spacing.touch).padding(MaterialTheme.spacing.xs).semantics {
-            role = Role.Button
-            this.selected = selected || candidate
-            stateDescription = "$state, ${seat.type.name.lowercase()} seat"
-            if (!enabled) disabled()
-        },
-        shape = MaterialTheme.shapes.small,
-        color = when {
-            selected -> MaterialTheme.colorScheme.primary
-            candidate -> MaterialTheme.colorScheme.secondary
-            available -> MaterialTheme.colorScheme.surface
-            seat.availability == SeatAvailability.RESERVED -> MaterialTheme.colorScheme.tertiaryContainer
-            seat.availability == SeatAvailability.BOOKED -> MaterialTheme.colorScheme.surfaceContainerHighest
-            else -> MaterialTheme.colorScheme.errorContainer
-        },
-        contentColor = when {
-            selected -> MaterialTheme.colorScheme.onPrimary
-            candidate -> MaterialTheme.colorScheme.onSecondary
-            seat.availability == SeatAvailability.RESERVED -> MaterialTheme.colorScheme.onTertiaryContainer
-            seat.availability == SeatAvailability.BLOCKED -> MaterialTheme.colorScheme.onErrorContainer
-            else -> MaterialTheme.colorScheme.onSurface
-        },
-        border = if (selected) null else BorderStroke(MaterialTheme.spacing.xs / 4, MaterialTheme.colorScheme.outline),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            when {
-                selected -> Icon(Icons.Outlined.Person, "Your seat ${seat.label}", Modifier.size(MaterialTheme.spacing.xxl))
-                seat.availability == SeatAvailability.BOOKED -> Icon(Icons.Outlined.Lock, "Taken ${seat.label}", Modifier.size(MaterialTheme.spacing.xxl))
-                else -> Text(seat.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@Composable
-private fun VenueMarker(label: String) {
-    Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
-        Text(
-            label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = MaterialTheme.spacing.xxl, vertical = MaterialTheme.spacing.sm),
-        )
-    }
-}
 
 @Composable
 private fun SeatDetails(uiState: VentUiState, onAction: (VentAction) -> Unit, modifier: Modifier = Modifier) {

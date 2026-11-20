@@ -49,9 +49,10 @@ This is not a claim of full completion of all 37 screen states.
 - Android camera torch control uses the device's actual torch state, handles
   missing flash hardware and failed requests, and turns off on disposal.
   Camera permission is rechecked when returning from system settings.
-- Seat map rendering still uses Compose seat controls rather than the specified
-  cached Canvas layer. Find-seat currently uses the existing selection action;
-  precise zoom-centroid and automatic map positioning need further work.
+- Seat maps now use a cached bitmap for stage and venue labels with a separate
+  Canvas seat layer. Zoom preserves the gesture centroid, hit testing resolves
+  the nearest seat within a 22dp radius, and Find my seat centers the confirmed
+  seat. A labeled seat list provides a keyboard/screen-reader alternative.
 - Attendee pass and organizer preview now reuse the same layout. Until an
   authenticated pass code is available, the pass shows an explicit unissued
   state rather than a fabricated QR. Expansion transitions still need work.
