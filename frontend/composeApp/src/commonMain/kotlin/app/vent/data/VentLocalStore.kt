@@ -28,6 +28,7 @@ data class SummitSettings(
     val eventAccent: Int? = null,
     val sessionRatings: Map<SummitSession, Int> = emptyMap(),
     val reminders: Map<SummitSession, Long> = emptyMap(),
+    val checkIns: Map<SummitSession, Set<String>> = emptyMap(),
 ) {
     // Older snapshots may have saved the original seeded address explicitly.
     val registeredAttendees: Set<String>

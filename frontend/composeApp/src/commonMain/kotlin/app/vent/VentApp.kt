@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import app.vent.ui.theme.spacing
+import app.vent.ui.theme.success
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -344,11 +345,42 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
     val space = MaterialTheme.spacing
     fun open(screen: VentScreen) = dispatch(VentAction.Navigate(screen))
     Box(Modifier.fillMaxSize()) {
-        Page(ui.eventTitle) {
+        Page(ui.eventTitle, actions = {
+            TextButton({ open(VentScreen.SETUP) }) { Text("Set up") }
+        }) {
             LazyColumn(contentPadding = PaddingValues(space.lg), verticalArrangement = Arrangement.spacedBy(space.md)) {
                 item {
-                    Text(ui.eventTitle, style = MaterialTheme.typography.headlineMedium)
-                    Text("${ui.attendees.size} attendees · ${(SummitSession.entries + ui.sessionDetails.keys).distinct().size} sessions")
+                    val sessions = (SummitSession.entries + ui.sessionDetails.keys).distinct()
+                    val session = sessions.firstOrNull { ui.sessionDetails[it]?.phase == SessionPhase.LIVE }
+                        ?: sessions.firstOrNull { (ui.sessionDetails[it]?.phase ?: SessionPhase.UPCOMING) == SessionPhase.UPCOMING }
+                        ?: ui.session
+                    val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
+                    OutlinedCard(Modifier.fillMaxWidth().heightIn(min = space.huge * 4 + space.xl)) {
+                        Column(Modifier.padding(space.md), verticalArrangement = Arrangement.spacedBy(space.sm)) {
+                            SessionStatus(details.phase)
+                            Text(details.title, style = MaterialTheme.typography.titleLarge)
+                            Text(details.time + " · " + details.room, style = MaterialTheme.typography.labelLarge)
+                            Button({
+                                dispatch(VentAction.OpenSession(session))
+                                if (details.phase == SessionPhase.UPCOMING) dispatch(VentAction.SetSessionPhase(session, SessionPhase.LIVE))
+                                else open(VentScreen.CONTROLS)
+                            }, Modifier.fillMaxWidth().height(space.action)) {
+                                Text(if (details.phase == SessionPhase.UPCOMING) "Start" else "Open live controls")
+                            }
+                        }
+                    }
+                }
+                item {
+                    Text("Today", style = MaterialTheme.typography.titleLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(space.md)) {
+                        OrganizerStatusTile("Checked in", ui.checkIns[ui.session].orEmpty().size,
+                            Icons.Outlined.CheckCircle, MaterialTheme.colorScheme.success, Modifier.weight(1f))
+                        OrganizerStatusTile("Assigned", ui.seatAssignments[ui.session].orEmpty().size,
+                            Icons.Outlined.Chair, MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
+                        val blocked = ui.venueRows.sumOf { row -> row.seats.count { it.availability == SeatAvailability.BLOCKED } }
+                        OrganizerStatusTile("Blocked", blocked, Icons.Outlined.WarningAmber,
+                            if (blocked > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f))
+                    }
                 }
                 item { Text("Live operations", style = MaterialTheme.typography.titleLarge) }
                 val links = listOf(
@@ -368,6 +400,16 @@ private fun OrganizerDashboard(ui: VentUiState, expanded: Boolean, dispatch: (Ve
                     }
                 }
             }
+        }
+    }
+}
+@Composable
+private fun OrganizerStatusTile(label: String, value: Int, icon: ImageVector, tint: Color, modifier: Modifier) {
+    OutlinedCard(modifier.heightIn(min = MaterialTheme.spacing.touch * 2)) {
+        Column(Modifier.padding(MaterialTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs)) {
+            Icon(icon, null, tint = tint)
+            Text(value.toString(), style = MaterialTheme.typography.displaySmall, color = tint)
+            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

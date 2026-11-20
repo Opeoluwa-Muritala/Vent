@@ -181,6 +181,7 @@ private class ExpiredViewModel : PanelModel()
                     OutlinedButton({ go(VentScreen.SEAT) }) { Text("Open seat navigator") }
                 }
                 VentScreen.QUESTS -> {
+                    var activeQuest by rememberSaveable { mutableStateOf<String?>(null) }
                     val responses = ui.questResponses[email].orEmpty()
                     if (ui.role == DemoRole.ATTENDEE) {
                     val earned = ui.questDefinitions.filter { it.title in responses }.sumOf { it.points }
@@ -196,7 +197,7 @@ private class ExpiredViewModel : PanelModel()
                             Modifier.fillMaxWidth().height(space.action)) { Text("Create your first quest") }
                     }
                     ui.customQuests.forEach { Summary("Conference quest", it, "Available") }
-                    ui.questDefinitions.forEach { quest ->
+                    ui.questDefinitions.filter { ui.role == DemoRole.ORGANIZER || it.phase != QuestPhase.DRAFT }.forEach { quest ->
                         Card(Modifier.fillMaxWidth().heightIn(min = space.heroIcon + space.lg)
                             .alpha(if (quest.title in responses) .6f else 1f)) {
                             Column(Modifier.padding(space.md), verticalArrangement = Arrangement.spacedBy(space.xs)) {
@@ -207,42 +208,54 @@ private class ExpiredViewModel : PanelModel()
                                     Icon(Icons.Outlined.CheckCircle, null, tint = MaterialTheme.colorScheme.success)
                                     Text("Claimed +${quest.points}", color = MaterialTheme.colorScheme.success)
                                 }
+                                else if (ui.role == DemoRole.ATTENDEE && quest.phase == QuestPhase.ENDED) Text("Ended")
+                                else if (ui.role == DemoRole.ATTENDEE && activeQuest != quest.title) {
+                                    OutlinedButton({ activeQuest = quest.title }) { Text("Start") }
+                                }
                                 else if (ui.role == DemoRole.ATTENDEE) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.Schedule, null, tint = MaterialTheme.colorScheme.tertiary)
+                                        Text("In progress", color = MaterialTheme.colorScheme.tertiary)
+                                    }
                                     val choices = if (quest.kind == "Action") listOf("Completed") else quest.options
                                     choices.forEach { answer ->
-                                        OutlinedButton({ dispatch(VentAction.CompleteQuest(quest.title, answer)) }) { Text(answer) }
+                                        OutlinedButton({ dispatch(VentAction.CompleteQuest(quest.title, answer)) },
+                                            enabled = quest.kind != "Poll" || !ui.pollPaused) { Text(answer) }
                                     }
-                                } else quest.options.forEach { Text(it) }
+                                    if (quest.kind == "Poll" && ui.pollPaused) Text("Voting is paused.")
+                                } else {
+                                    Text(quest.phase.name.lowercase().replaceFirstChar { it.uppercase() },
+                                        style = MaterialTheme.typography.labelLarge)
+                                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                                        QuestPhase.entries.forEach { phase ->
+                                            FilterChip(quest.phase == phase, {
+                                                dispatch(VentAction.SetQuestPhase(quest.title, phase))
+                                            }, { Text(phase.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                     ui.message?.let { Text(it) }
                 }
                 VentScreen.WRAPPED -> {
-                    Text("Your 2025 summit journey", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelLarge)
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                        Column(Modifier.fillMaxWidth().padding(space.xl), verticalArrangement = Arrangement.spacedBy(space.lg)) {
-                            Text(ui.eventTitle + " · Wrapped")
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.md)) {
-                                Portrait(email)
-                                Column { Text(email.substringBefore('@'), style = MaterialTheme.typography.headlineSmall); Text("Your summit journey") }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                                Tile(Icons.Outlined.EventAvailable, "Sessions", "4", Modifier.weight(1f))
-                                Tile(Icons.Outlined.Chair, "Keynote seat", ui.confirmedSeat, Modifier.weight(1f))
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                                Tile(Icons.Outlined.HowToVote, "Interactions", "6 polls", Modifier.weight(1f))
-                                Tile(Icons.Outlined.EmojiEvents, "Achievements", "5 badges", Modifier.weight(1f))
-                            }
-                            Text("Rank #12 of 480 Attendees", style = MaterialTheme.typography.titleMedium)
-                            Text("Overall Community Score · 980 XP")
-                        }
+                    val responses = ui.questResponses[email].orEmpty()
+                    val attended = ui.seating.filter { it.value.checkedIn }.keys +
+                        if (ui.isCheckedIn) setOf(ui.session) else emptySet()
+                    val earned = ui.questDefinitions.filter { it.title in responses }.sumOf { it.points }
+                    Text("Your summit journey", style = MaterialTheme.typography.headlineSmall)
+                    Summary(ui.eventTitle, "$earned points", "${responses.size} quests completed")
+                    Row(horizontalArrangement = Arrangement.spacedBy(space.lg)) {
+                        Tile(Icons.Outlined.EventAvailable, "Sessions", attended.size.toString(), Modifier.weight(1f))
+                        Tile(Icons.Outlined.HowToVote, "Polls answered",
+                            ui.questDefinitions.count { it.kind == "Poll" && it.title in responses }.toString(), Modifier.weight(1f))
                     }
-                    Summary("Attendance certificate", "Technical track completed", "Demo achievement · Vent Demo Day")
-                    Row(horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                        Tile(Icons.Outlined.Schedule, "Total time", "14h 45m", Modifier.weight(1f))
-                        Tile(Icons.Outlined.Group, "Connections", "38 scans", Modifier.weight(1f))
+                    Text("Sessions attended", style = MaterialTheme.typography.titleLarge)
+                    if (attended.isEmpty()) Text("Check in to sessions to build your summit recap.")
+                    attended.forEach { session ->
+                        Summary("Checked in", ui.sessionDetails[session]?.title ?: session.title,
+                            ui.seating[session]?.seat.orEmpty().ifBlank { "Open seating" })
                     }
                     OutlinedButton({ go(VentScreen.PROFILE) }) { Text("View summit pass") }
                 }

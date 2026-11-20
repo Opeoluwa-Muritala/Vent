@@ -30,6 +30,10 @@ precedence over the earlier TechCon splash name.
   explicit demo stop/resume controls.
 - Hall assignment progress text, blocked-seat warning, map thumbnail treatment,
   and removal of the unavailable anomaly panel.
+- Live poll controls use actual saved vote counts, pause/resume voting, and
+  confirm ending the poll. Demo controls are isolated local UI state and never
+  mutate real poll votes. Quests expose Draft, Live, Ended, Start, In progress,
+  and Claimed states. Organizer home and attendee recap use stored counts.
 - Seating editor sheet with Seats, Rows, and Publish controls, publish
   confirmation, row movement explanations, attendee seat-selection sheet, and
   map pinch zoom clamped to 1x–3x.

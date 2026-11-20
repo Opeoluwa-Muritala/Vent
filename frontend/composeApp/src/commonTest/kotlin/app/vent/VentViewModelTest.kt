@@ -22,6 +22,23 @@ class VentViewModelTest {
     @BeforeTest fun setUp() { Dispatchers.setMain(dispatcher) }
     @AfterTest fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun pausedAndEndedPollsDoNotAcceptVotes() = runTest {
+        val model = VentViewModel(FakeLocalStore(), accountEmail = "attendee@vent.demo")
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.SwitchRole(DemoRole.ORGANIZER))
+        model.onAction(VentAction.PublishQuest(QuestDefinition("Poll", "Poll", "Choose one", 10, listOf("A", "B"))))
+        model.onAction(VentAction.TogglePoll)
+        model.onAction(VentAction.SwitchRole(DemoRole.ATTENDEE))
+        model.onAction(VentAction.CompleteQuest("Poll", "A"))
+        assertTrue(model.uiState.value.questResponses.isEmpty())
+        model.onAction(VentAction.SwitchRole(DemoRole.ORGANIZER))
+        model.onAction(VentAction.TogglePoll)
+        model.onAction(VentAction.SetQuestPhase("Poll", QuestPhase.ENDED))
+        model.onAction(VentAction.SwitchRole(DemoRole.ATTENDEE))
+        model.onAction(VentAction.CompleteQuest("Poll", "A"))
+        assertTrue(model.uiState.value.questResponses.isEmpty())
+    }
+
     @Test fun startingAnotherSessionEndsThePreviousLiveSession() = runTest {
         val store = FakeLocalStore()
         val model = VentViewModel(store, startAsOrganizer = true)
@@ -50,7 +67,7 @@ class VentViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         val attendee = VentViewModel(store, attendeeOnly = true)
         dispatcher.scheduler.advanceUntilIdle()
-        val timestamp = kotlin.time.Clock.System.now().toEpochMilliseconds() + 60_000
+        val timestamp = 4_102_444_800_000L
         attendee.onAction(VentAction.SetReminder(SummitSession.KEYNOTE, timestamp))
         attendee.onAction(VentAction.RateSession(SummitSession.KEYNOTE, 4))
         dispatcher.scheduler.advanceUntilIdle()

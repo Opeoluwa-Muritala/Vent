@@ -16,6 +16,7 @@ data class VentUiState(
     val sessionDetails: Map<SummitSession, SessionDetails> = emptyMap(),
     val sessionRatings: Map<SummitSession, Int> = emptyMap(),
     val reminders: Map<SummitSession, Long> = emptyMap(),
+    val checkIns: Map<SummitSession, Set<String>> = emptyMap(),
     val questDefinitions: List<QuestDefinition> = emptyList(),
     val questResponses: Map<String, Map<String, String>> = emptyMap(),
     val seatAssignments: Map<SummitSession, Map<String, String>> = emptyMap(),
@@ -48,6 +49,7 @@ data class VentUiState(
 )
 
 sealed interface VentAction {
+    data class SetQuestPhase(val title: String, val phase: QuestPhase) : VentAction
     data class SetSessionPhase(val session: SummitSession, val phase: SessionPhase) : VentAction
     data class RateSession(val session: SummitSession, val rating: Int) : VentAction
     data class SetReminder(val session: SummitSession, val timestamp: Long?) : VentAction
@@ -139,6 +141,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         sessionDetails = saved.settings.sessionDetails,
                         sessionRatings = saved.settings.sessionRatings,
                         reminders = saved.settings.reminders,
+                        checkIns = saved.settings.checkIns,
                         questDefinitions = saved.settings.questDefinitions,
                         questResponses = saved.settings.questResponses,
                         seatAssignments = saved.settings.seatAssignments,
@@ -175,6 +178,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         sessionDetails = saved.settings.sessionDetails,
                         sessionRatings = saved.settings.sessionRatings,
                         reminders = saved.settings.reminders,
+                        checkIns = saved.settings.checkIns,
                         questDefinitions = saved.settings.questDefinitions,
                         questResponses = saved.settings.questResponses,
                         seatAssignments = saved.settings.seatAssignments,
@@ -192,6 +196,12 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
     override fun onIntent(action: VentAction) {
         val before = mutableState.value
         when (action) {
+            is VentAction.SetQuestPhase -> if (before.role == DemoRole.ORGANIZER) {
+                mutableState.update { it.copy(questDefinitions = it.questDefinitions.map { quest ->
+                    if (quest.title == action.title) quest.copy(phase = action.phase) else quest
+                }) }
+                persist()
+            }
             is VentAction.SetSessionPhase -> if (before.role == DemoRole.ORGANIZER &&
                 action.session in (SummitSession.entries + before.sessionDetails.keys)) {
                 val details = before.sessionDetails[action.session] ?: SessionDetails(
@@ -214,7 +224,9 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                 action.session in (SummitSession.entries + before.sessionDetails.keys) &&
                 (action.timestamp == null || action.timestamp > kotlin.time.Clock.System.now().toEpochMilliseconds())) {
                 mutableState.update { it.copy(reminders = if (action.timestamp == null) it.reminders - action.session
-                    else it.reminders + (action.session to action.timestamp), message = if (action.timestamp == null) "Reminder removed" else "Reminder saved") }
+                    else it.reminders + (action.session to action.timestamp),
+                    preferences = if (action.timestamp == null) it.preferences else it.preferences + "Session reminders",
+                    message = if (action.timestamp == null) "Reminder removed" else "Reminder saved") }
                 persist()
             }
             is VentAction.CreateSession -> if (before.role == DemoRole.ORGANIZER && action.details.isValid(before.eventDays)) {
@@ -261,7 +273,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
             is VentAction.CompleteQuest -> if (before.role == DemoRole.ATTENDEE && accountEmail.isNotBlank()) {
                 val quest = before.questDefinitions.firstOrNull { it.title == action.title }
                 val responses = before.questResponses[accountEmail].orEmpty()
-                if (quest != null && quest.title !in responses) {
+                if (quest != null && quest.phase == QuestPhase.LIVE && quest.title !in responses &&
+                    (quest.kind != "Poll" || !before.pollPaused)) {
                     val accepted = when (quest.kind) {
                         "Action" -> action.answer == "Completed"
                         "Poll" -> action.answer in quest.options
@@ -415,7 +428,10 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
     private fun checkIn() {
         val state = mutableState.value
         if (state.role != DemoRole.ATTENDEE || state.isCheckedIn) return
-        mutableState.update { it.copy(isCheckedIn = true, message = "Checked in for ${it.session.title}") }
+        mutableState.update { it.copy(isCheckedIn = true,
+            checkIns = if (accountEmail.isBlank()) it.checkIns else it.checkIns +
+                (it.session to (it.checkIns[it.session].orEmpty() + accountEmail)),
+            message = "Checked in for ${it.session.title}") }
         persist()
     }
 
@@ -427,7 +443,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                 state.session, state.seating + (state.session to state.sessionSeating()), state.customQuests, state.attendees,
                 state.sessionDetails, state.questDefinitions, state.questResponses, state.seatAssignments,
                 eventDays = state.eventDays, eventAccent = state.eventAccent,
-                sessionRatings = state.sessionRatings, reminders = state.reminders))
+                sessionRatings = state.sessionRatings, reminders = state.reminders, checkIns = state.checkIns))
         expectedWrite = localState
         writes.trySend(localState)
     }

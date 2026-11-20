@@ -73,8 +73,8 @@ private fun ReminderWheel(values: List<Int>, initialIndex: Int, modifier: Modifi
 internal fun SessionReminderHost(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     val host = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(ui.reminders, ui.role) {
-        if (ui.role != DemoRole.ATTENDEE) return@LaunchedEffect
+    LaunchedEffect(ui.reminders, ui.role, ui.preferences) {
+        if (ui.role != DemoRole.ATTENDEE || "Session reminders" !in ui.preferences) return@LaunchedEffect
         val reminder = ui.reminders.minByOrNull { it.value } ?: return@LaunchedEffect
         kotlinx.coroutines.delay((reminder.value - kotlin.time.Clock.System.now().toEpochMilliseconds()).coerceAtLeast(0))
         val title = ui.sessionDetails[reminder.key]?.title ?: reminder.key.title

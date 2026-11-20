@@ -137,9 +137,9 @@ private fun SessionClock(label: String, value: String, modifier: Modifier = Modi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CreateQuestDialog(close: () -> Unit, save: (QuestDefinition) -> Unit) {
+internal fun CreateQuestDialog(close: () -> Unit, initialKind: String = "Action", save: (QuestDefinition) -> Unit) {
     var title by rememberSaveable { mutableStateOf("") }
-    var kind by rememberSaveable { mutableStateOf("Action") }
+    var kind by rememberSaveable { mutableStateOf(initialKind) }
     var prompt by rememberSaveable { mutableStateOf("") }
     var points by rememberSaveable { mutableStateOf("10") }
     var choices by rememberSaveable { mutableStateOf("") }

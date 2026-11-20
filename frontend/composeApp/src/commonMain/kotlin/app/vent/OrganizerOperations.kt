@@ -28,6 +28,7 @@ import app.vent.composeapp.generated.resources.Res
 import app.vent.composeapp.generated.resources.conference_stage
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
+import app.vent.ui.theme.success
 import androidx.compose.ui.draw.alpha
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -259,35 +260,70 @@ private fun OccupancyMetric(label: String, count: Int, modifier: Modifier) {
 @Composable
 private fun LiveOperations(ui: VentUiState, dispatch: (VentAction) -> Unit) {
     val space = MaterialTheme.spacing
+    var demo by rememberSaveable { mutableStateOf(false) }
+    var create by rememberSaveable { mutableStateOf(false) }
+    var ending by rememberSaveable { mutableStateOf<String?>(null) }
+    val poll = ui.questDefinitions.lastOrNull { it.kind == "Poll" && it.phase == QuestPhase.LIVE }
     OpsCard {
-        OpsHeading(Icons.Outlined.Tune, ui.session.title)
-        Text("${ui.session.room} · ${ui.session.time}", style = MaterialTheme.typography.bodySmall)
+        OpsHeading(Icons.Outlined.Tune, ui.sessionDetails[ui.session]?.title ?: ui.session.title)
+        Text("${ui.session.room} · ${ui.session.time}", style = MaterialTheme.typography.labelLarge)
     }
-    OpsHeading(Icons.Outlined.HowToVote, "Poll control")
-    OpsCard {
+    if (poll == null) {
+        OpsCard {
+            Icon(Icons.Outlined.HowToVote, null, Modifier.size(space.heroIcon))
+            Text("No live poll", style = MaterialTheme.typography.headlineSmall)
+            Text("Publish a poll quest to collect attendee votes.")
+            Button({ create = true }, Modifier.fillMaxWidth().height(space.action)) { Text("Create poll") }
+        }
+    } else OpsCard {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
+            val statusColor = if (ui.pollPaused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.success
+            Icon(if (ui.pollPaused) Icons.Outlined.Pause else Icons.Outlined.Circle, null, tint = statusColor)
+            Text(if (ui.pollPaused) "Paused" else "Live", color = statusColor)
+        }
+        Text(poll.prompt, style = MaterialTheme.typography.titleLarge)
+        val answers = ui.questResponses.values.mapNotNull { it[poll.title] }
+        poll.options.forEach { option ->
+            val count = answers.count { it == option }
+            val share = if (answers.isEmpty()) 0f else count.toFloat() / answers.size
+            Row {
+                Text(option, Modifier.weight(1f))
+                Text("${(share * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+            }
+            LinearProgressIndicator({ share }, Modifier.fillMaxWidth().height(space.xxxl))
+        }
+        Text("${answers.size} votes", style = MaterialTheme.typography.labelLarge)
+        if (ui.pollPaused) Button({ dispatch(VentAction.TogglePoll) }, Modifier.fillMaxWidth().height(space.action)) {
+            Text("Resume voting")
+        } else OutlinedButton({ dispatch(VentAction.TogglePoll) }, Modifier.fillMaxWidth().height(space.action),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)) {
+            Icon(Icons.Outlined.Pause, null)
+            Text("Pause voting")
+        }
+        TextButton({ ending = poll.title }) { Text("End poll", color = MaterialTheme.colorScheme.error) }
+    }
+    if (!demo) OutlinedButton({ demo = true }, Modifier.fillMaxWidth()) { Text("Start demo") }
+    else OpsCard {
         Text("Demo mode. Votes are not saved.", style = MaterialTheme.typography.labelLarge)
         OpsBadge("Demo", emphasized = false)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-            Icon(if (ui.pollPaused) Icons.Outlined.Pause else Icons.Outlined.Circle, null,
-                tint = MaterialTheme.colorScheme.tertiary)
-            Text(if (ui.pollPaused) "Paused" else "Demo running", color = MaterialTheme.colorScheme.tertiary)
+        Text("Which engineering priority matters most?", style = MaterialTheme.typography.titleLarge)
+        listOf("Agentic workflows" to .42f, "On-device models" to .28f,
+            "Zero-trust infrastructure" to .18f, "Developer tooling" to .12f).forEach { (label, share) ->
+            Row { Text(label, Modifier.weight(1f)); Text("${(share * 100).toInt()}%") }
+            LinearProgressIndicator({ share }, Modifier.fillMaxWidth().height(space.xxxl))
         }
-        Text("Which engineering priority will have the highest impact?", style = MaterialTheme.typography.titleMedium)
-        listOf("Agentic workflows" to .42f, "On-device models" to .28f, "Zero-trust infrastructure" to .18f, "Developer tooling" to .12f)
-            .forEach { (label, share) ->
-                Row {
-                    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Text("${(share * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-                }
-                LinearProgressIndicator({ share }, Modifier.fillMaxWidth())
-            }
-        Button({ dispatch(VentAction.TogglePoll) }, Modifier.fillMaxWidth()) {
-            Text(if (ui.pollPaused) "Resume demo" else "Stop demo")
-        }
+        Button({ demo = false }, Modifier.fillMaxWidth().height(space.action)) { Text("Stop demo") }
     }
-    OpsHeading(Icons.Outlined.Bolt, "Summit Quest & Stage Triggers")
-    OpsCard {
-        Button({ dispatch(VentAction.Navigate(VentScreen.QUESTS)) }, Modifier.fillMaxWidth()) { Text("Open quests") }
+    if (create) CreateQuestDialog({ create = false }, initialKind = "Poll") {
+        dispatch(VentAction.PublishQuest(it)); create = false
+    }
+    ending?.let { title ->
+        AlertDialog(onDismissRequest = { ending = null }, title = { Text("End poll?") },
+            text = { Text("Voting closes for all attendees. Existing results are kept.") },
+            confirmButton = { TextButton({
+                dispatch(VentAction.SetQuestPhase(title, QuestPhase.ENDED)); ending = null
+            }) { Text("End poll", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton({ ending = null }) { Text("Cancel") } })
     }
 }
 

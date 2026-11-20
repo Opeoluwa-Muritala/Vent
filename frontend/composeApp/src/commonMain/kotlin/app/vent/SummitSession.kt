@@ -4,6 +4,9 @@ package app.vent
 enum class SessionPhase { UPCOMING, LIVE, ENDED }
 
 @kotlinx.serialization.Serializable
+enum class QuestPhase { DRAFT, LIVE, ENDED }
+
+@kotlinx.serialization.Serializable
 data class SessionDetails(
     val title: String, val time: String, val room: String, val speaker: String,
     val headerImage: String? = null,
@@ -21,6 +24,7 @@ internal fun SessionDetails.isValid(eventDays: Int = 2): Boolean =
 data class QuestDefinition(
     val title: String, val kind: String, val prompt: String, val points: Int,
     val options: List<String> = emptyList(), val correctAnswer: String? = null,
+    val phase: QuestPhase = QuestPhase.LIVE,
 )
 
 @kotlinx.serialization.Serializable
