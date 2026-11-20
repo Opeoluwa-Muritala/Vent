@@ -182,7 +182,8 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
     val space = MaterialTheme.spacing
     val ink = app.vent.ui.theme.SessionHeaderForeground
     Box(Modifier.fillMaxWidth().height(space.action * 4 - space.xs)) {
-        SessionHeaderImage(details.headerImage, Modifier.matchParentSize())
+        if (details.headerImage == null) VenuePhoto(Modifier.matchParentSize())
+        else SessionHeaderImage(details.headerImage, Modifier.matchParentSize())
         if (details.headerImage != null) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = .82f)))
         Column(Modifier.fillMaxWidth().safeDrawingPadding().padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

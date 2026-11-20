@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalInspectionMode
 import app.vent.composeapp.generated.resources.Res
-import app.vent.composeapp.generated.resources.auditorium
+import app.vent.composeapp.generated.resources.conference_stage
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
 import androidx.compose.ui.draw.alpha
@@ -329,7 +329,7 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onS
         ListItem(headlineContent = { Text(ui.session.room) }, overlineContent = { Text("Venue") },
             leadingContent = { Icon(Icons.Outlined.LocationOn, null) }, colors = rowColors)
     }
-    Image(painterResource(Res.drawable.auditorium), "Auditorium", Modifier.fillMaxWidth().height(space.heroIcon * 2)
+    Image(painterResource(Res.drawable.conference_stage), "Conference stage", Modifier.fillMaxWidth().height(space.heroIcon * 2)
         .clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
     OpsCard {
         OpsHeading(Icons.Outlined.Palette, "Current theme")

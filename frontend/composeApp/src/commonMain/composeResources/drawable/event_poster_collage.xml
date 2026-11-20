@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="1080dp" android:height="1920dp"
+    android:viewportWidth="1080" android:viewportHeight="1920">
+    <path android:fillColor="#241F28" android:pathData="M0,0 H1080 V1920 H0 Z" />
+    <group android:rotation="-8" android:pivotX="260" android:pivotY="400">
+        <path android:fillColor="#D69A72" android:pathData="M-80,-60 H590 V820 H-80 Z" />
+        <path android:fillColor="#34282D" android:pathData="M80,90 H450 V140 H80 Z M80,180 H350 V205 H80 Z M80,230 H410 V255 H80 Z" />
+        <path android:fillColor="#34282D" android:pathData="M260,330 A170,170 0,1,0 260,670 A170,170 0,1,0 260,330 Z" />
+        <path android:fillColor="#D69A72" android:pathData="M260,400 A100,100 0,1,0 260,600 A100,100 0,1,0 260,400 Z M260,470 H460 V530 H260 Z" />
+        <path android:fillColor="#F2D8B5" android:pathData="M80,730 H440 V738 H80 Z M80,760 H380 V768 H80 Z" />
+    </group>
+    <group android:rotation="10" android:pivotX="850" android:pivotY="520">
+        <path android:fillColor="#ADA0CD" android:pathData="M610,80 H1190 V1050 H610 Z" />
+        <path android:fillColor="#27212D" android:pathData="M680,170 H1060 V200 H680 Z M680,230 H1000 V260 H680 Z M680,290 H1100 V320 H680 Z" />
+        <path android:fillColor="#27212D" android:pathData="M680,470 L880,370 L1100,470 L880,570 Z M680,570 L880,470 L1100,570 L880,670 Z M680,670 L880,570 L1100,670 L880,770 Z" />
+        <path android:fillColor="#F0E6DD" android:pathData="M680,870 H1040 V882 H680 Z M680,920 H980 V932 H680 Z" />
+    </group>
+    <group android:rotation="6" android:pivotX="200" android:pivotY="1260">
+        <path android:fillColor="#E7D7BE" android:pathData="M-110,850 H590 V1720 H-110 Z" />
+        <path android:fillColor="#43312C" android:pathData="M20,950 H440 V1000 H20 Z M20,1040 H350 V1070 H20 Z" />
+        <path android:fillColor="#A76047" android:pathData="M220,1120 L410,1440 H30 Z" />
+        <path android:fillColor="#43312C" android:pathData="M220,1180 L350,1410 H90 Z" />
+        <path android:fillColor="#A76047" android:pathData="M20,1530 H450 V1542 H20 Z M20,1580 H390 V1592 H20 Z" />
+    </group>
+    <group android:rotation="-7" android:pivotX="850" android:pivotY="1450">
+        <path android:fillColor="#694A48" android:pathData="M610,1060 H1200 V2000 H610 Z" />
+        <path android:fillColor="#E8C4A3" android:pathData="M690,1160 H1060 V1200 H690 Z M690,1240 H1010 V1280 H690 Z" />
+        <path android:fillColor="#D3946C" android:pathData="M900,1380 A150,150 0,1,0 900,1680 A150,150 0,1,0 900,1380 Z" />
+        <path android:fillColor="#694A48" android:pathData="M900,1430 A100,100 0,1,0 900,1630 A100,100 0,1,0 900,1430 Z" />
+    </group>
+    <path android:fillColor="#241F28" android:fillAlpha="0.1"
+        android:pathData="M0,180 H1080 V184 H0 Z M0,380 H1080 V384 H0 Z M0,580 H1080 V584 H0 Z M0,780 H1080 V784 H0 Z M0,980 H1080 V984 H0 Z M0,1180 H1080 V1184 H0 Z M0,1380 H1080 V1384 H0 Z M0,1580 H1080 V1584 H0 Z M0,1780 H1080 V1784 H0 Z" />
+</vector>

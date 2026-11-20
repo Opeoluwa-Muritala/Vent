@@ -63,11 +63,14 @@ This is not a claim of full completion of all 37 screen states.
   state rather than a fabricated QR. Expansion transitions still need work.
   Session forms include the event hall dropdown. Quest options use editable chips, and
   preference edits are applied only when Save is pressed.
-- Replace existing poster and conference photos with individually licensed
-  commercial-use assets; speaker images require consent. Photos have not been
-  replaced, license-verified, or compressed as part of this change.
-- The logo mark is supplied; an outlined Inter Medium wordmark has not been
-  supplied. The application currently renders the wordmark as text.
+- Placeholder photographs have been removed. Login uses original geometric
+  poster artwork, and conference imagery uses a 124KB licensed photograph by
+  Teemu Paananen. Source and license records are in `assets/ASSET_SOURCES.md`.
+  Speaker/attendee identity is shown as text or initials until consented photos
+  are supplied. Photo resources use Compose's unqualified drawable directory.
+- The Inter Medium wordmark is now outlined into SVG and shared Vector Drawable
+  paths, so it no longer depends on a font installation. The font license and
+  reproducible outlining script are included.
 
 ## Verification
 

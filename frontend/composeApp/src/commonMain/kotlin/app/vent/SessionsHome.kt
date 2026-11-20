@@ -154,40 +154,6 @@ internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (I
     }
 }
 
-@Composable
-private fun KeynoteCard(details: SessionDetails, colors: CardColors, border: BorderStroke, shadow: Modifier, onOpen: () -> Unit) {
-    val space = MaterialTheme.spacing
-    Card(
-        modifier = Modifier.fillMaxWidth().then(shadow),
-        shape = MaterialTheme.shapes.large,
-        colors = colors,
-        border = border,
-    ) {
-        Column(Modifier.padding(space.lg), verticalArrangement = Arrangement.spacedBy(space.md)) {
-            Text("Featured keynote", style = MaterialTheme.typography.labelMedium)
-            Text(details.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                Icon(Icons.Outlined.Schedule, null, Modifier.size(FilterChipDefaults.IconSize))
-                Text(details.time, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                Icon(Icons.Outlined.LocationOn, null, Modifier.size(FilterChipDefaults.IconSize))
-                Text(details.room, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(space.sm)) {
-                Image(
-                    painterResource(Res.drawable.keynote_speakers), null,
-                    Modifier.width(space.action).height(space.huge).clip(MaterialTheme.shapes.large),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                )
-                Text(details.speaker, style = MaterialTheme.typography.bodyMedium)
-            }
-            Button(onOpen, Modifier.fillMaxWidth().heightIn(min = space.action)) {
-                Text("View session")
-                Spacer(Modifier.width(space.sm))
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null)
-            }
-        }
-    }
-}
 
 internal fun sessionStartLabel(time: String): String =
     time.trim().split(Regex("\\s*(?:[–—]|\\s-\\s)\\s*"), limit = 2).first().trim()

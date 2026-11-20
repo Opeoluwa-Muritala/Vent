@@ -42,7 +42,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vent.api.EventDto
 import app.vent.composeapp.generated.resources.Res
-import app.vent.composeapp.generated.resources.event_poster_wall
+import app.vent.composeapp.generated.resources.event_poster_collage
+import app.vent.composeapp.generated.resources.events_wordmark
 import app.vent.data.VentApi
 import app.vent.ui.theme.VentTheme
 import app.vent.ui.theme.spacing
@@ -185,14 +186,15 @@ fun AuthFlow(state: AuthUiState, onEmail: (String) -> Unit, onCode: (String) -> 
     Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
     ) {
-        Image(painterResource(Res.drawable.event_poster_wall), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+        Image(painterResource(Res.drawable.event_poster_collage), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(
             0.4f to heroTint.copy(alpha = 0f), 1f to heroTint,
         )))
         Column(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(spacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
             VentMark(logoInk, Modifier.size(spacing.huge))
-            Text("events", style = MaterialTheme.typography.titleLarge)
+            Icon(painterResource(Res.drawable.events_wordmark), "events",
+                Modifier.width(spacing.huge * 3).height(spacing.xxxl), tint = MaterialTheme.colorScheme.onSurface)
             Text("Your summit pass", style = MaterialTheme.typography.headlineLarge)
         }
         Surface(
