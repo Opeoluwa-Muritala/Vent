@@ -359,12 +359,7 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onS
     }
     OpsCard {
         OpsHeading(Icons.Outlined.Badge, "Pass preview")
-        Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.padding(space.lg)) {
-                Text("All-Access Staff Pass", style = MaterialTheme.typography.titleMedium)
-                Text("${title.ifBlank { ui.eventTitle }} · ${ui.activeGate}")
-            }
-        }
+        SummitPassCard(title.ifBlank { ui.eventTitle }, "Attendee name", Modifier.fillMaxWidth(), compact = true)
         Text("This is what attendees see.", style = MaterialTheme.typography.labelLarge)
     }
     if (title.trim() == ui.eventTitle) Text("No changes to save.", style = MaterialTheme.typography.labelLarge)

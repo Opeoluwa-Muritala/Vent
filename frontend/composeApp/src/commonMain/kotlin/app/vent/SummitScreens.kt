@@ -247,14 +247,13 @@ private class ExpiredViewModel : PanelModel()
                     OutlinedButton({ go(VentScreen.PROFILE) }) { Text("View summit pass") }
                 }
                 VentScreen.PROFILE -> {
+                    var showPass by rememberSaveable { mutableStateOf(false) }
                     Card {
                         Column(Modifier.fillMaxWidth().padding(space.xl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(space.md)) {
                             Portrait(email)
                             Text(email, style = MaterialTheme.typography.titleLarge)
                             Text(ui.eventTitle)
                             Text("All-access attendee", style = MaterialTheme.typography.labelLarge)
-                            if (email == "guest@vent.invalid") Image(painterResource(Res.drawable.demo_pass_code), "Demo summit badge",
-                                Modifier.width(space.heroIcon * 2).aspectRatio(185f / 210f))
                         }
                     }
                     Text("Summit Details & Status", style = MaterialTheme.typography.titleMedium)
@@ -263,7 +262,32 @@ private class ExpiredViewModel : PanelModel()
                         Tile(Icons.Outlined.Bolt, "Points", ui.questDefinitions.filter { it.title in ui.questResponses[email].orEmpty() }.sumOf { it.points }.toString(), Modifier.weight(1f))
                         Tile(Icons.Outlined.FactCheck, "Sessions", ui.seating.values.count { it.checkedIn }.toString(), Modifier.weight(1f))
                     }
-                    Summary("Your pass", if (ui.isCheckedIn) "Checked in" else "Active", "All-access")
+                    Card(onClick = { showPass = true }, modifier = Modifier.fillMaxWidth()) {
+                        ListItem(
+                            headlineContent = { Text("Your pass") },
+                            supportingContent = { Text("All-access · View pass") },
+                            leadingContent = { Icon(Icons.Outlined.QrCode, null) },
+                            trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
+                        )
+                    }
+                    if (showPass) androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showPass = false },
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+                    ) {
+                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
+                                .padding(space.xxl), verticalArrangement = Arrangement.spacedBy(space.lg)) {
+                                TextButton({ showPass = false }) {
+                                    Icon(Icons.Outlined.Close, null)
+                                    Text("Close pass")
+                                }
+                                SummitPassCard(ui.eventTitle, email, Modifier.fillMaxWidth(),
+                                    demo = email == "guest@vent.invalid")
+                                Text("A verified pass is required to show a code to staff.",
+                                    style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
                     var showPreferences by rememberSaveable { mutableStateOf(false) }
                     var draftPreferences by remember { mutableStateOf(ui.preferences) }
                     Card(onClick = { draftPreferences = ui.preferences; showPreferences = true }, modifier = Modifier.fillMaxWidth()) {

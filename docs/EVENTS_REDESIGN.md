@@ -51,8 +51,10 @@ This is not a claim of full completion of all 37 screen states.
 - Seat map rendering still uses Compose seat controls rather than the specified
   cached Canvas layer. Find-seat currently uses the existing selection action;
   precise zoom-centroid and automatic map positioning need further work.
-- Pass-preview parity and the prescribed expansion transitions need another
-  pass. Session forms include the event hall dropdown. Quest options use editable chips, and
+- Attendee pass and organizer preview now reuse the same layout. Until an
+  authenticated pass code is available, the pass shows an explicit unissued
+  state rather than a fabricated QR. Expansion transitions still need work.
+  Session forms include the event hall dropdown. Quest options use editable chips, and
   preference edits are applied only when Save is pressed.
 - Replace existing poster and conference photos with individually licensed
   commercial-use assets; speaker images require consent. Photos have not been
