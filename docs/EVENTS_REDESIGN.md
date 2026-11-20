@@ -38,9 +38,10 @@ precedence over the earlier TechCon splash name.
 
 This is not a claim of full completion of all 37 screen states.
 
-- The repository has no iOS application host, Info.plist, or launch asset
-  catalog. The iOS launch screen must be connected in that host on macOS.
-  The existing iOS camera implementation remains a manual-code fallback.
+- The iOS host is provided in `frontend/iosApp` with an XcodeGen definition,
+  SwiftUI entry point, storyboard-free launch configuration, and a native
+  AVFoundation scanner with permission recovery, torch control, and cleanup.
+  An Xcode build and device validation still require macOS.
 - Session lifecycle is organizer-controlled and persisted: starting a session
   ends the previous live session. Schedule/detail screens use upcoming, live,
   and ended states. Personal time-wheel reminders and session ratings persist

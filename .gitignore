@@ -23,6 +23,8 @@ yarn-error.log*
 *.iml
 *.ipr
 *.iws
+frontend/iosApp/*.xcodeproj/
+**/xcuserdata/
 local.properties
 *.local
 
