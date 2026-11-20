@@ -20,12 +20,23 @@ def digest(value):
 
 def signed(payload, purpose, lifetime):
     now = int(time.time())
-    return jwt.encode(dict(payload, aud=purpose, iss="vent-python", iat=now, exp=now + lifetime), current_app.config["SECRET_KEY"], algorithm="HS256")
+    return jwt.encode(
+        dict(payload, aud=purpose, iss="vent-python", iat=now, exp=now + lifetime),
+        current_app.config["SECRET_KEY"],
+        algorithm="HS256",
+    )
 
 
 def decode(token, purpose):
     try:
-        return jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"], audience=purpose, issuer="vent-python", options={"require": ["exp", "iat", "aud", "iss"]})
+        return jwt.decode(
+            token,
+            current_app.config["SECRET_KEY"],
+            algorithms=["HS256"],
+            audience=purpose,
+            issuer="vent-python",
+            options={"require": ["exp", "iat", "aud", "iss"]},
+        )
     except jwt.InvalidTokenError:
         abort(401, description="Invalid or expired token")
 
@@ -42,6 +53,7 @@ def protected(function):
         if not g.user or not credential or credential.expires <= time.time():
             abort(401)
         return function(*args, **kwargs)
+
     return wrapped
 
 
@@ -50,7 +62,9 @@ def tokens(user):
     sid = "refresh:" + digest(refresh)
     db().add(Credential(key=sid, user_id=user.id, expires=time.time() + 30 * 86400, payload={}))
     db().flush()
-    return dict(accessToken=signed({"sub": user.id, "sid": sid}, "access", 900), refreshToken=refresh, expiresInSeconds=900)
+    return dict(
+        accessToken=signed({"sub": user.id, "sid": sid}, "access", 900), refreshToken=refresh, expiresInSeconds=900
+    )
 
 
 def send_code(address, code):
@@ -59,6 +73,7 @@ def send_code(address, code):
         sender(address, code)
         return
     from .email_service import deliver
+
     deliver(address, code)
 
 

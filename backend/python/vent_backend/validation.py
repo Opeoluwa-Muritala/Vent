@@ -19,7 +19,13 @@ def text(value, maximum=160, minimum=1):
 
 
 def number(value, minimum=0, maximum=10000, integer=False):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not minimum <= value <= maximum or (integer and not isinstance(value, int)):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or not minimum <= value <= maximum
+        or (integer and not isinstance(value, int))
+    ):
         abort(400, description="Invalid number")
     return value
 

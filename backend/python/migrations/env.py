@@ -1,6 +1,9 @@
 from alembic import context
+from dotenv import load_dotenv
 from vent_backend import create_app
 from vent_backend.db import Base
+
+load_dotenv()
 
 app = create_app()
 engine = app.extensions["engine"]

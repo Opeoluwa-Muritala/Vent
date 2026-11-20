@@ -19,6 +19,9 @@ def create_app(config=None):
         EMAIL_SERVICE_URL=os.getenv("EMAIL_SERVICE_URL", "https://emailope.vercel.app/"),
     )
     app.config.update(config or {})
+    app.config["ORGANIZER_EMAILS"] = [
+        value.strip().lower() for value in app.config["ORGANIZER_EMAILS"] if value.strip()
+    ]
     if len(app.config["SECRET_KEY"]) < 32:
         raise ValueError("SECRET_KEY must contain at least 32 characters")
     url = make_url(app.config["DATABASE_URL"])
@@ -39,19 +42,31 @@ def create_app(config=None):
         origin = request.headers.get("Origin")
         if origin and origin not in app.config["ALLOWED_ORIGINS"]:
             from flask import abort
+
             abort(403, description="Origin is not allowed")
 
     @app.after_request
     def finish(response):
-        if response.status_code < 400:
-            g.db.commit()
-        else:
+        try:
+            if response.status_code < 400:
+                g.db.commit()
+            else:
+                g.db.rollback()
+        except IntegrityError:
             g.db.rollback()
-        response.headers.update({
-            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
-            "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
-        })
+            response = jsonify(code="conflict", message="The operation conflicts with existing data")
+            response.status_code = 409
+        response.headers.update(
+            {
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": "DENY",
+                "Referrer-Policy": "no-referrer",
+                "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+            }
+        )
+        if request.is_secure:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         origin = request.headers.get("Origin")
         if origin and origin in app.config["ALLOWED_ORIGINS"]:
             response.headers["Access-Control-Allow-Origin"] = origin
@@ -81,13 +96,16 @@ def create_app(config=None):
         return jsonify(code="internal_error", message="The request could not be completed"), 500
 
     from .auth import auth
+
     app.register_blueprint(auth, url_prefix="/api/v1")
     from .events import api
+
     app.register_blueprint(api, url_prefix="/api/v1")
 
     @app.get("/api/v1/health")
     def health():
         from sqlalchemy import text
+
         g.db.execute(text("SELECT 1"))
         return {"status": "ok"}
 

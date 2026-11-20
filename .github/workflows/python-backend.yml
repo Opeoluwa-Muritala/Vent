@@ -1,0 +1,28 @@
+name: Python backend
+
+on:
+  push:
+    paths: ['backend/python/**', '.github/workflows/python-backend.yml']
+  pull_request:
+    paths: ['backend/python/**', '.github/workflows/python-backend.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/python/requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check --config pyproject.toml .
+      - run: python -m ruff format --check --config pyproject.toml .
+      - run: python -m pytest -q

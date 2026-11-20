@@ -1,4 +1,5 @@
 """JSON email gateway contract shared with FieldCRM."""
+
 import json
 from urllib.error import URLError
 from urllib.parse import urlsplit

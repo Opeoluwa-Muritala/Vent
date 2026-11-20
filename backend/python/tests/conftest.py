@@ -1,6 +1,4 @@
 import pytest
-from sqlalchemy.orm import Session
-
 from vent_backend import create_app
 from vent_backend.db import Base
 
@@ -8,14 +6,16 @@ from vent_backend.db import Base
 @pytest.fixture
 def app(tmp_path):
     messages = {}
-    app = create_app({
-        "TESTING": True,
-        "SECRET_KEY": "test-secret-" * 6,
-        "DATABASE_URL": "sqlite:///" + str(tmp_path / "test.db"),
-        "EMAIL_SENDER": lambda email, code: messages.update({email: code}),
-        "ORGANIZER_EMAILS": ["organizer@example.com"],
-        "ALLOWED_ORIGINS": ["http://localhost:8080"],
-    })
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret-" * 6,
+            "DATABASE_URL": "sqlite:///" + str(tmp_path / "test.db"),
+            "EMAIL_SENDER": lambda email, code: messages.update({email: code}),
+            "ORGANIZER_EMAILS": ["organizer@example.com"],
+            "ALLOWED_ORIGINS": ["http://localhost:8080"],
+        }
+    )
     Base.metadata.create_all(app.extensions["engine"])
     app.extensions["messages"] = messages
     yield app

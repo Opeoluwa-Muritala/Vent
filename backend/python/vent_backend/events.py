@@ -73,13 +73,16 @@ def event_detail(identifier):
 @api.post("/events")
 @protected
 def create_event():
-    if g.user.email not in current_app.config["ORGANIZER_EMAILS"] and not db().scalar(select(Membership).where(Membership.user_id == g.user.id, Membership.role == "ORGANIZER")):
+    if g.user.email not in current_app.config["ORGANIZER_EMAILS"] and not db().scalar(
+        select(Membership).where(Membership.user_id == g.user.id, Membership.role == "ORGANIZER")
+    ):
         abort(403)
     data = schedule(body(["title", "startsAt", "endsAt", "seedArgb"], ["coverImageUrl"]))
     data["seedArgb"] = color(data["seedArgb"])
     # Cover uploads belong to a separate storage service; never fetch supplied URLs.
     if data.get("coverImageUrl") is not None:
         from urllib.parse import urlsplit
+
         cover = urlsplit(text(data.pop("coverImageUrl"), 2048))
         if cover.scheme != "https" or not cover.hostname or cover.username:
             abort(400)
@@ -135,14 +138,28 @@ def attendees(identifier):
 def layout(data):
     number(data["width"], 0.1, 10000)
     number(data["height"], 0.1, 10000)
-    if not isinstance(data["seats"], list) or len(data["seats"]) > 500 or not isinstance(data["elements"], list) or len(data["elements"]) > 200:
+    if (
+        not isinstance(data["seats"], list)
+        or len(data["seats"]) > 500
+        or not isinstance(data["elements"], list)
+        or len(data["elements"]) > 200
+    ):
         abort(400)
     seen, labels = set(), set()
     for seat in data["seats"]:
-        if not isinstance(seat, dict) or set(seat) - {"id", "label", "x", "y", "rotation", "type", "state", "isMine"} or not {"id", "label", "x", "y", "rotation", "type", "state"} <= seat.keys():
+        if (
+            not isinstance(seat, dict)
+            or set(seat) - {"id", "label", "x", "y", "rotation", "type", "state", "isMine"}
+            or not {"id", "label", "x", "y", "rotation", "type", "state"} <= seat.keys()
+        ):
             abort(400)
         sid, label = text(seat["id"], 100), text(seat["label"], 40)
-        if sid in seen or label in labels or seat["type"] not in ("STANDARD", "ACCESSIBLE", "VIP", "BLOCKED") or seat["state"] not in ("FREE", "BLOCKED"):
+        if (
+            sid in seen
+            or label in labels
+            or seat["type"] not in ("STANDARD", "ACCESSIBLE", "VIP", "BLOCKED")
+            or seat["state"] not in ("FREE", "BLOCKED")
+        ):
             abort(400)
         seen.add(sid)
         labels.add(label)
@@ -196,7 +213,9 @@ def save_layout(identifier):
 @api.post("/sessions")
 @protected
 def create_session():
-    data = schedule(body(["eventId", "hallId", "title", "startsAt", "endsAt", "checkInOpensAt", "checkInClosesAt"]), True)
+    data = schedule(
+        body(["eventId", "hallId", "title", "startsAt", "endsAt", "checkInOpensAt", "checkInClosesAt"]), True
+    )
     access(data["eventId"], ["ORGANIZER"])
     hall = get(Hall, data["hallId"], True)
     if hall.event_id != data["eventId"]:
@@ -213,7 +232,13 @@ def seats(row):
     result = []
     for seat in row.hall.payload["seats"]:
         booking = occupied.get(seat["id"])
-        result.append(dict(seat, state=("CHECKED_IN" if booking.checked_in else "ASSIGNED") if booking else seat["state"], isMine=bool(booking and booking.user_id == g.user.id)))
+        result.append(
+            dict(
+                seat,
+                state=("CHECKED_IN" if booking.checked_in else "ASSIGNED") if booking else seat["state"],
+                isMine=bool(booking and booking.user_id == g.user.id),
+            )
+        )
     return result
 
 
@@ -232,7 +257,12 @@ def seat_snapshot(identifier):
 def preview(identifier):
     row = session(identifier, ["ORGANIZER"], True)
     ids = body(["attendeeIds"])["attendeeIds"]
-    if not isinstance(ids, list) or not 1 <= len(ids) <= 500 or any(not isinstance(v, str) for v in ids) or len(set(ids)) != len(ids):
+    if (
+        not isinstance(ids, list)
+        or not 1 <= len(ids) <= 500
+        or any(not isinstance(v, str) for v in ids)
+        or len(set(ids)) != len(ids)
+    ):
         abort(400)
     for user_id in ids:
         if not db().get(Membership, (row.event_id, user_id)):
@@ -244,8 +274,20 @@ def preview(identifier):
     assignments = dict(zip(pending, free))
     assignments.update({b.user_id: b.seat_id for b in existing if b.user_id in ids})
     preview_id = uid()
-    db().add(Credential(key="preview:" + preview_id, user_id=g.user.id, expires=time.time() + 300, payload={"session": identifier, "version": row.version, "assignments": assignments}))
-    return {"previewId": preview_id, "baseVersion": row.version, "assignments": assignments, "unseated": [i for i in pending if i not in assignments]}
+    db().add(
+        Credential(
+            key="preview:" + preview_id,
+            user_id=g.user.id,
+            expires=time.time() + 300,
+            payload={"session": identifier, "version": row.version, "assignments": assignments},
+        )
+    )
+    return {
+        "previewId": preview_id,
+        "baseVersion": row.version,
+        "assignments": assignments,
+        "unseated": [i for i in pending if i not in assignments],
+    }
 
 
 @api.post("/sessions/<identifier>/assignments/commit")
@@ -253,8 +295,15 @@ def preview(identifier):
 def commit(identifier):
     row = session(identifier, ["ORGANIZER"], True)
     data = body(["previewId", "baseVersion"])
-    value = db().scalar(select(Credential).where(Credential.key == "preview:" + text(data["previewId"], 36)).with_for_update())
-    if not value or value.user_id != g.user.id or value.expires <= time.time() or value.payload["session"] != identifier:
+    value = db().scalar(
+        select(Credential).where(Credential.key == "preview:" + text(data["previewId"], 36)).with_for_update()
+    )
+    if (
+        not value
+        or value.user_id != g.user.id
+        or value.expires <= time.time()
+        or value.payload["session"] != identifier
+    ):
         abort(404)
     if value.payload["version"] != row.version or data["baseVersion"] != row.version:
         abort(409, description="Seat data changed; preview again")
@@ -284,7 +333,11 @@ def unassign(identifier, seat_id):
 @protected
 def screen_code(identifier):
     session(identifier, ["ORGANIZER", "STAFF"])
-    return {"token": signed({"session": identifier, "kind": "SCREEN"}, "checkin", 30), "type": "SCREEN", "expiresAt": datetime.fromtimestamp(time.time() + 30, timezone.utc).isoformat()}
+    return {
+        "token": signed({"session": identifier, "kind": "SCREEN"}, "checkin", 30),
+        "type": "SCREEN",
+        "expiresAt": datetime.fromtimestamp(time.time() + 30, timezone.utc).isoformat(),
+    }
 
 
 @api.post("/sessions/<identifier>/printed-code/rotate")
@@ -293,14 +346,24 @@ def printed_code(identifier):
     row = session(identifier, ["ORGANIZER"], True)
     row.printed_epoch += 1
     lifetime = max(1, int(timestamp(row.payload["checkInClosesAt"]).timestamp() - time.time()))
-    return {"token": signed({"session": identifier, "kind": "PRINTED", "epoch": row.printed_epoch}, "checkin", lifetime), "type": "PRINTED", "expiresAt": None}
+    return {
+        "token": signed({"session": identifier, "kind": "PRINTED", "epoch": row.printed_epoch}, "checkin", lifetime),
+        "type": "PRINTED",
+        "expiresAt": None,
+    }
 
 
 def record_checkin(row, user_id):
     now = time.time()
-    if not timestamp(row.payload["checkInOpensAt"]).timestamp() <= now <= timestamp(row.payload["checkInClosesAt"]).timestamp():
+    if (
+        not timestamp(row.payload["checkInOpensAt"]).timestamp()
+        <= now
+        <= timestamp(row.payload["checkInClosesAt"]).timestamp()
+    ):
         abort(409, description="Check-in is closed")
-    booking = db().scalar(select(Booking).where(Booking.session_id == row.id, Booking.user_id == user_id).with_for_update())
+    booking = db().scalar(
+        select(Booking).where(Booking.session_id == row.id, Booking.user_id == user_id).with_for_update()
+    )
     if not booking:
         abort(409, description="A seat assignment is required")
     points = 0 if booking.checked_in else 10
@@ -318,7 +381,9 @@ def checkin(identifier):
     text(data["deviceId"], 128, 8)
     timestamp(data["clientTimestamp"])
     claims = decode(text(data["token"], 4096), "checkin")
-    if claims.get("session") != identifier or (claims.get("kind") == "PRINTED" and claims.get("epoch") != row.printed_epoch):
+    if claims.get("session") != identifier or (
+        claims.get("kind") == "PRINTED" and claims.get("epoch") != row.printed_epoch
+    ):
         abort(400, description="Invalid check-in code")
     return record_checkin(row, g.user.id)
 
@@ -339,7 +404,12 @@ def manual_checkin(identifier):
 def attendee_pass(identifier):
     access(identifier)
     event = get(Event, identifier)
-    return {"token": signed({"event": identifier, "sub": g.user.id}, "pass", 300), "expiresAt": datetime.fromtimestamp(time.time() + 300, timezone.utc).isoformat(), "attendeeName": g.user.name, "eventTitle": event.payload["title"]}
+    return {
+        "token": signed({"event": identifier, "sub": g.user.id}, "pass", 300),
+        "expiresAt": datetime.fromtimestamp(time.time() + 300, timezone.utc).isoformat(),
+        "attendeeName": g.user.name,
+        "eventTitle": event.payload["title"],
+    }
 
 
 @api.post("/events/<identifier>/passes/verify")
@@ -358,11 +428,18 @@ def verify_pass(identifier):
 def polls(identifier):
     session(identifier, ["ORGANIZER"] if request.method == "POST" else None)
     if request.method == "GET":
-        return [dict(p.payload, id=p.id, sessionId=identifier) for p in db().scalars(select(Poll).where(Poll.session_id == identifier))]
+        return [
+            dict(p.payload, id=p.id, sessionId=identifier)
+            for p in db().scalars(select(Poll).where(Poll.session_id == identifier))
+        ]
     data = body(["question", "options"])
     if not isinstance(data["options"], list) or not 2 <= len(data["options"]) <= 8:
         abort(400)
-    payload = {"question": text(data["question"], 300, 3), "options": [text(o, 160) for o in data["options"]], "status": "OPEN"}
+    payload = {
+        "question": text(data["question"], 300, 3),
+        "options": [text(o, 160) for o in data["options"]],
+        "status": "OPEN",
+    }
     poll = Poll(id=uid(), session_id=identifier, payload=payload)
     db().add(poll)
     return dict(payload, id=poll.id, sessionId=identifier), 201
@@ -400,8 +477,20 @@ def results(identifier):
 
 
 def progress(event_id, user_id):
-    attendance = len(db().scalars(select(Booking).join(Session).where(Session.event_id == event_id, Booking.user_id == user_id, Booking.checked_in.is_not(None))).all())
-    answers = len(db().scalars(select(Answer).join(Poll).join(Session).where(Session.event_id == event_id, Answer.user_id == user_id)).all())
+    attendance = len(
+        db()
+        .scalars(
+            select(Booking)
+            .join(Session)
+            .where(Session.event_id == event_id, Booking.user_id == user_id, Booking.checked_in.is_not(None))
+        )
+        .all()
+    )
+    answers = len(
+        db()
+        .scalars(select(Answer).join(Poll).join(Session).where(Session.event_id == event_id, Answer.user_id == user_id))
+        .all()
+    )
     return {"SESSIONS_CHECKED_IN": attendance, "POLLS_ANSWERED": answers}
 
 
@@ -429,7 +518,11 @@ def quests(identifier):
     number(data["target"], 1, 100, True)
     number(data["points"], 0, 1000, True)
     badge_id = text(data.pop("badgeId"), 100)
-    data["badge"] = {"id": badge_id, "name": "Full House" if data["type"] == "SESSIONS_CHECKED_IN" else "Voice", "description": f"Complete {data['target']} {data['type'].lower().replace('_', ' ')}"}
+    data["badge"] = {
+        "id": badge_id,
+        "name": "Full House" if data["type"] == "SESSIONS_CHECKED_IN" else "Voice",
+        "description": f"Complete {data['target']} {data['type'].lower().replace('_', ' ')}",
+    }
     quest = Quest(id=uid(), event_id=identifier, payload=data)
     db().add(quest)
     return dict(data, id=quest.id, current=0, completed=False), 201
@@ -440,8 +533,12 @@ def leaderboard(event_id):
     result = []
     for user in users:
         current = progress(event_id, user.id)
-        points = current["SESSIONS_CHECKED_IN"] * 10 + sum(q["points"] for q in quest_dtos(event_id, user.id) if q["completed"])
-        result.append({"displayName": user.name, "points": points, "isCurrentUser": user.id == g.user.id, "_id": user.id})
+        points = current["SESSIONS_CHECKED_IN"] * 10 + sum(
+            q["points"] for q in quest_dtos(event_id, user.id) if q["completed"]
+        )
+        result.append(
+            {"displayName": user.name, "points": points, "isCurrentUser": user.id == g.user.id, "_id": user.id}
+        )
     result.sort(key=lambda v: (-v["points"], v["_id"]))
     for rank, value in enumerate(result, 1):
         value.pop("_id")
@@ -463,7 +560,13 @@ def wrapped(identifier):
     values = progress(identifier, g.user.id)
     quests = quest_dtos(identifier, g.user.id)
     rank = next(v for v in leaderboard(identifier) if v["isCurrentUser"])
-    return {"sessionsAttended": values["SESSIONS_CHECKED_IN"], "pollsAnswered": values["POLLS_ANSWERED"], "points": rank["points"], "rank": rank["rank"], "badges": [q["badge"] for q in quests if q["completed"]]}
+    return {
+        "sessionsAttended": values["SESSIONS_CHECKED_IN"],
+        "pollsAnswered": values["POLLS_ANSWERED"],
+        "points": rank["points"],
+        "rank": rank["rank"],
+        "badges": [q["badge"] for q in quests if q["completed"]],
+    }
 
 
 @api.post("/events/<identifier>/wrapped/generate")
@@ -485,5 +588,15 @@ def occupancy(identifier):
         bookings = db().scalars(select(Booking).where(Booking.session_id == row.id)).all()
         checked = sum(bool(b.checked_in) for b in bookings)
         capacity = sum(s["type"] != "BLOCKED" and s["state"] != "BLOCKED" for s in row.hall.payload["seats"])
-        result.append({"sessionId": row.id, "capacity": capacity, "assigned": len(bookings), "checkedIn": checked, "noShows": len(bookings) - checked if now > timestamp(row.payload["checkInClosesAt"]).timestamp() else 0})
+        result.append(
+            {
+                "sessionId": row.id,
+                "capacity": capacity,
+                "assigned": len(bookings),
+                "checkedIn": checked,
+                "noShows": len(bookings) - checked
+                if now > timestamp(row.payload["checkInClosesAt"]).timestamp()
+                else 0,
+            }
+        )
     return result
