@@ -148,6 +148,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
         val inOperations = uiState.role == DemoRole.ORGANIZER &&
             uiState.screen in setOf(VentScreen.DOOR, VentScreen.OCCUPANCY, VentScreen.CONTROLS)
         VentTheme(accent = uiState.eventAccent?.let { androidx.compose.ui.graphics.Color(it) }) {
+        ProvideAttendeePass(api, authState.events.firstOrNull()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 720.dp
             if (expanded) {
@@ -174,6 +175,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             }
         }
         SessionReminderHost(uiState, onAction)
+        }
         }
     }
 }

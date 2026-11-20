@@ -274,6 +274,10 @@ private class ExpiredViewModel : PanelModel()
                         onDismissRequest = { showPass = false },
                         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
                     ) {
+                        val passState = LocalAttendeePass.current
+                        val retryPass = LocalPassRetry.current
+                        var brightness by remember { mutableStateOf(false) }
+                        PassBrightnessBoost(brightness)
                         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                             Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
                                 .padding(space.xxl), verticalArrangement = Arrangement.spacedBy(space.lg)) {
@@ -281,9 +285,22 @@ private class ExpiredViewModel : PanelModel()
                                     Icon(Icons.Outlined.Close, null)
                                     Text("Close pass")
                                 }
-                                SummitPassCard(ui.eventTitle, email, Modifier.fillMaxWidth(),
-                                    demo = email == "guest@vent.invalid")
-                                Text("A verified pass is required to show a code to staff.",
+                                SummitPassCard(passState.pass?.eventTitle ?: ui.eventTitle,
+                                    passState.pass?.attendeeName ?: email, Modifier.fillMaxWidth(),
+                                    demo = email == "guest@vent.invalid", token = passState.pass?.token)
+                                if (passState.loading) {
+                                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    Text("Issuing your pass…", style = MaterialTheme.typography.labelLarge)
+                                }
+                                passState.error?.let {
+                                    Text(it, color = MaterialTheme.colorScheme.error)
+                                    OutlinedButton(retryPass) { Text("Try again") }
+                                }
+                                Button({ brightness = !brightness }, Modifier.fillMaxWidth().height(space.touch),
+                                    enabled = passState.pass != null) {
+                                    Text(if (brightness) "Restore screen" else "Show to staff")
+                                }
+                                if (passState.pass == null) Text("A verified pass is required to show a code to staff.",
                                     style = MaterialTheme.typography.labelLarge)
                             }
                         }

@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable data class ApiError(val code: String, val message: String, val requestId: String? = null)
 @Serializable data class HealthResponse(val status: String)
+@Serializable data class AttendeePassDto(val token: String, val expiresAt: String, val attendeeName: String, val eventTitle: String)
+@Serializable data class VerifyPassRequest(val token: String)
+@Serializable data class VerifiedPassDto(val attendeeName: String, val eventTitle: String)
 @Serializable data class OtpRequest(val email: String)
 @Serializable data class OtpVerifyRequest(val email: String, val code: String)
 @Serializable data class OtpRequestResponse(val expiresInSeconds: Long = 600, val resendAfterSeconds: Long = 30)

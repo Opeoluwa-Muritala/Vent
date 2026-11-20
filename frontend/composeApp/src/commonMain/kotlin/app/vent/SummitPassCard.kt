@@ -16,6 +16,8 @@ import app.vent.ui.theme.spacing
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import app.vent.ui.theme.VentTheme
+import app.vent.ui.theme.passCodeSurface
+import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 
 @Composable
 internal fun SummitPassCard(
@@ -24,6 +26,7 @@ internal fun SummitPassCard(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     demo: Boolean = false,
+    token: String? = null,
 ) {
     val spacing = MaterialTheme.spacing
     Surface(modifier, shape = MaterialTheme.shapes.extraLarge,
@@ -39,7 +42,13 @@ internal fun SummitPassCard(
                     style = MaterialTheme.typography.labelLarge)
             }
             val codeSize = if (compact) spacing.huge * 3 else spacing.huge * 6
-            if (demo) {
+            if (token != null) {
+                Surface(Modifier.size(codeSize), color = MaterialTheme.colorScheme.passCodeSurface,
+                    shape = MaterialTheme.shapes.small) {
+                    Image(rememberQrCodePainter(token), "Verified event admission pass",
+                        Modifier.fillMaxSize().padding(spacing.lg))
+                }
+            } else if (demo) {
                 Image(painterResource(Res.drawable.demo_pass_code), "Demo pass code",
                     Modifier.size(codeSize))
                 Text("Demo pass", style = MaterialTheme.typography.labelLarge)

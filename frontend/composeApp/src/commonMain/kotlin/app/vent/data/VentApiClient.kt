@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 interface VentApi {
+    suspend fun attendeePass(eventId: String): AttendeePassDto = error("Pass issuance is unavailable")
     suspend fun loadPreferences(): UserPreferencesDto = error("Preference sync is unavailable")
     suspend fun savePreferences(preferences: UserPreferencesDto): Unit = error("Preference sync is unavailable")
     suspend fun isOrganizer(): Boolean = false
@@ -35,6 +36,8 @@ interface VentApi {
 }
 
 class VentApiClient(private val baseUrl: String, private val client: HttpClient = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false }) } }) : VentApi {
+    override suspend fun attendeePass(eventId: String): AttendeePassDto =
+        authorizedGet("/api/v1/events/${eventId.also { require(it.matches(Regex("[0-9a-fA-F-]{36}"))) }}/pass")
     override suspend fun loadPreferences(): UserPreferencesDto = authorizedGet("/api/v1/me/preferences")
 
     override suspend fun savePreferences(preferences: UserPreferencesDto) {

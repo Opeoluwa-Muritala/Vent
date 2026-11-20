@@ -77,3 +77,6 @@ internal val ColorScheme.success: Color
 
 internal val ColorScheme.heroTint: Color
     get() = if (background == VentDarkColors.background) Color(0xFF241F28) else Color(0xFFF0E8ED)
+
+internal val ColorScheme.passCodeSurface: Color
+    get() = Color.White

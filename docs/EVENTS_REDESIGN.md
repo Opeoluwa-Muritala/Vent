@@ -45,7 +45,11 @@ This is not a claim of full completion of all 37 screen states.
   ends the previous live session. Schedule/detail screens use upcoming, live,
   and ended states. Personal time-wheel reminders and session ratings persist
   per device. Reminder banners currently require the app to remain open.
-  Authenticated pass QR issuance and brightness support still need integration.
+  Pass issuance now checks event membership, returns a short-lived signed token,
+  and provides an event-scoped staff verification endpoint. QRose renders the
+  QR in shared Compose code. Tokens stay in memory and refresh every five minutes.
+  Show to staff temporarily raises Android/iOS brightness and restores it when
+  dismissed. Web requests fullscreen because browsers cannot set hardware brightness.
 - Android camera torch control uses the device's actual torch state, handles
   missing flash hardware and failed requests, and turns off on disposal.
   Camera permission is rechecked when returning from system settings.
