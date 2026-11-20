@@ -64,7 +64,8 @@ This is not a claim of full completion of all 37 screen states.
   seat. A labeled seat list provides a keyboard/screen-reader alternative.
 - Attendee pass and organizer preview now reuse the same layout. Until an
   authenticated pass code is available, the pass shows an explicit unissued
-  state rather than a fabricated QR. Expansion transitions still need work.
+  state rather than a fabricated QR. Navigation now uses 200-250ms
+  origin-aware expansion/return transitions; Material sheets slide from below.
   Session forms include the event hall dropdown. Quest options use editable chips, and
   preference edits are applied only when Save is pressed.
 - Placeholder photographs have been removed. Login uses original geometric

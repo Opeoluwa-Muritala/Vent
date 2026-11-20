@@ -10,9 +10,14 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import app.vent.ui.theme.spacing
@@ -53,8 +58,15 @@ internal fun SessionScheduleCard(
     val scheme = MaterialTheme.colorScheme
     val primary = scheme.primary
     val borderWidth = spacing.xs
-    Card(onClick = onOpen,
+    val motion = LocalSessionMotion.current
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    var window by remember { mutableStateOf(Size.Zero) }
+    Card(onClick = { motion?.select(bounds, window); onOpen() },
         modifier = Modifier.fillMaxWidth().heightIn(min = if (featured) spacing.huge * 4 + spacing.xl else spacing.touch + spacing.huge)
+            .onGloballyPositioned { coordinates ->
+                bounds = coordinates.boundsInWindow()
+                window = coordinates.findRootCoordinates().size.let { Size(it.width.toFloat(), it.height.toFloat()) }
+            }
             .alpha(if (details.phase == SessionPhase.ENDED) .6f else 1f)
             .drawWithContent {
                 drawContent()
@@ -82,5 +94,37 @@ internal fun SessionScheduleCard(
                 Button(onCheckIn, Modifier.fillMaxWidth().height(spacing.action)) { Text("Check in") }
             }
         }
+    }
+}
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun UpcomingLightPreview() = SessionCardPreview(SessionPhase.UPCOMING, false)
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun UpcomingDarkPreview() = SessionCardPreview(SessionPhase.UPCOMING, true)
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun LiveLightPreview() = SessionCardPreview(SessionPhase.LIVE, false)
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun LiveDarkPreview() = SessionCardPreview(SessionPhase.LIVE, true)
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun EndedLightPreview() = SessionCardPreview(SessionPhase.ENDED, false)
+
+@org.jetbrains.compose.ui.tooling.preview.Preview
+@Composable
+private fun EndedDarkPreview() = SessionCardPreview(SessionPhase.ENDED, true)
+
+@Composable
+private fun SessionCardPreview(phase: SessionPhase, dark: Boolean) {
+    app.vent.ui.theme.VentTheme(darkTheme = dark) {
+        SessionScheduleCard(SessionDetails("Opening keynote", "10:00 AM – 11:15 AM", "Hall A", "Speaker", phase = phase),
+            featured = true, organizer = false, bookmarked = false, onBookmark = {}, onOpen = {}, onCheckIn = {})
     }
 }

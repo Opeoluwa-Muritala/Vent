@@ -72,6 +72,7 @@ kotlin {
             kotlin.srcDir(generateBackendConfig)
         }
         commonMain.dependencies {
+            implementation(libs.compose.animation)
             implementation(libs.qrose)
             implementation(project(":shared-domain"))
             implementation(project(":shared-api"))

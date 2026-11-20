@@ -27,6 +27,7 @@ data class VentUiState(
     val eventTitle: String = "TechCon Summit 2025",
     val eventDays: Int = 2,
     val eventAccent: Int? = null,
+    val previewAccent: Int? = null,
     val pollPaused: Boolean = false,
     val bookmarks: Set<String> = emptySet(),
     val preferences: Set<String> = emptySet(),
@@ -49,6 +50,7 @@ data class VentUiState(
 )
 
 sealed interface VentAction {
+    data class PreviewEventAccent(val argb: Int?) : VentAction
     data class SetQuestPhase(val title: String, val phase: QuestPhase) : VentAction
     data class SetSessionPhase(val session: SummitSession, val phase: SessionPhase) : VentAction
     data class RateSession(val session: SummitSession, val rating: Int) : VentAction
@@ -196,6 +198,9 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
     override fun onIntent(action: VentAction) {
         val before = mutableState.value
         when (action) {
+            is VentAction.PreviewEventAccent -> if (before.role == DemoRole.ORGANIZER) {
+                mutableState.update { it.copy(previewAccent = action.argb) }
+            }
             is VentAction.SetQuestPhase -> if (before.role == DemoRole.ORGANIZER) {
                 mutableState.update { it.copy(questDefinitions = it.questDefinitions.map { quest ->
                     if (quest.title == action.title) quest.copy(phase = action.phase) else quest
@@ -338,7 +343,7 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                 }
             }
             is VentAction.SetEventAccent -> if (before.role == DemoRole.ORGANIZER) {
-                mutableState.update { it.copy(eventAccent = action.argb) }
+                mutableState.update { it.copy(eventAccent = action.argb, previewAccent = null) }
                 persist()
             }
             VentAction.TogglePoll -> if (mutableState.value.role == DemoRole.ORGANIZER) {

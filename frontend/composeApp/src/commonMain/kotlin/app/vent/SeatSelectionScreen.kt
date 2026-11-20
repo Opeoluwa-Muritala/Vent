@@ -72,15 +72,15 @@ internal fun SeatSelectionScreen(uiState: VentUiState, onAction: (VentAction) ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = maxHeight
             androidx.compose.material3.BottomSheetScaffold(
-                sheetPeekHeight = height * .55f,
+                sheetPeekHeight = height * .3f,
                 sheetContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 sheetContent = {
-                    SeatDetails(uiState, onAction, Modifier.fillMaxWidth().heightIn(max = height * .9f))
+                    SeatDetails(uiState, onAction, Modifier.fillMaxWidth().height(height * .9f))
                 },
             ) {
                 Column(Modifier.fillMaxSize().padding(MaterialTheme.spacing.lg)) {
                     Text(uiState.session.room, style = MaterialTheme.typography.headlineLarge)
-                    SeatMapPane(uiState, onAction, Modifier.fillMaxWidth().height(height * .4f))
+                    SeatMapPane(uiState, onAction, Modifier.fillMaxWidth().height(height * .33f))
                 }
             }
         }
@@ -161,7 +161,15 @@ private fun SeatMapPane(uiState: VentUiState, onAction: (VentAction) -> Unit, mo
     ) {
         Column(Modifier.fillMaxWidth().padding(MaterialTheme.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.lg)) {
-            Text("Seat ${uiState.selectedSeat}", style = MaterialTheme.typography.titleLarge)
+            Text("Row ${uiState.selectedSeat.takeWhile(Char::isLetter)}, seat ${uiState.selectedSeat.dropWhile(Char::isLetter)}",
+                style = MaterialTheme.typography.titleLarge)
+            val selected = uiState.venueRows.flatMap { it.seats }.firstOrNull { it.label == uiState.selectedSeat }
+            selected?.let {
+                Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text(it.type.name.lowercase().replaceFirstChar { character -> character.uppercase() },
+                        Modifier.padding(MaterialTheme.spacing.sm), style = MaterialTheme.typography.labelLarge)
+                }
+            }
             Text("Confirm your seat for this session.")
             Button({ onAction(VentAction.ConfirmSeat); selectionSheet = false },
                 Modifier.fillMaxWidth().height(MaterialTheme.spacing.action),
@@ -316,9 +324,10 @@ private fun SeatLegend() {
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.lg),
     ) {
         LegendItem("Available", MaterialTheme.colorScheme.surface, true)
-        LegendItem("Selected", MaterialTheme.colorScheme.primary)
-        LegendItem("Reserved", MaterialTheme.colorScheme.tertiaryContainer)
-        LegendItem("Unavailable", MaterialTheme.colorScheme.surfaceContainerHighest)
+        LegendItem("Yours", MaterialTheme.colorScheme.primary)
+        LegendItem("Taken", MaterialTheme.colorScheme.surfaceContainerHigh)
+        LegendItem("VIP", MaterialTheme.colorScheme.tertiary)
+        LegendItem("Blocked", MaterialTheme.colorScheme.errorContainer)
     }
 }
 

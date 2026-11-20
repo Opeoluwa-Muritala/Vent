@@ -150,8 +150,14 @@ class AuthViewModel(
         if (state.value.loading) return
         mutableState.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            runCatching { block() }.onFailure {
-                mutableState.update { current -> current.copy(loading = false, code = if (current.step == AuthStep.CODE) "" else current.code, error = "Can't reach the server. Check your connection and try again.") }
+            runCatching { block() }.onFailure { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                val message = if (failure is app.vent.data.SignInCodeRejected) when (failure.code) {
+                    "expired_code" -> "That code expired. Request a new one."
+                    "code_locked" -> "Too many attempts. Request a new code."
+                    else -> "That code didn't match. Try again or request a new one."
+                } else "Can't reach the server. Check your connection and try again."
+                mutableState.update { current -> current.copy(loading = false, code = if (current.step == AuthStep.CODE) "" else current.code, error = message) }
             }
         }
     }

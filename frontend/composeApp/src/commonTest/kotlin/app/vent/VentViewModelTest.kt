@@ -22,6 +22,20 @@ class VentViewModelTest {
     @BeforeTest fun setUp() { Dispatchers.setMain(dispatcher) }
     @AfterTest fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun themePreviewDoesNotPersistUntilConfirmed() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.PreviewEventAccent(0xFF9ED8C6.toInt()))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(null, store.saved.settings.eventAccent)
+        assertEquals(0xFF9ED8C6.toInt(), model.uiState.value.previewAccent)
+        model.onAction(VentAction.SetEventAccent(0xFF9ED8C6.toInt()))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(0xFF9ED8C6.toInt(), store.saved.settings.eventAccent)
+        assertEquals(null, model.uiState.value.previewAccent)
+    }
+
     @Test fun pausedAndEndedPollsDoNotAcceptVotes() = runTest {
         val model = VentViewModel(FakeLocalStore(), accountEmail = "attendee@vent.demo")
         dispatcher.scheduler.advanceUntilIdle()

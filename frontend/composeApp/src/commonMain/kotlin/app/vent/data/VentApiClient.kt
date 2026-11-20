@@ -19,6 +19,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+class SignInCodeRejected(val code: String) : RuntimeException()
+
 interface VentApi {
     suspend fun attendeePass(eventId: String): AttendeePassDto = error("Pass issuance is unavailable")
     suspend fun loadPreferences(): UserPreferencesDto = error("Preference sync is unavailable")
@@ -59,12 +61,20 @@ class VentApiClient(private val baseUrl: String, private val client: HttpClient 
         contentType(ContentType.Application.Json)
         setBody(OtpRequest(email))
     }.body()
-    override suspend fun verifyOtp(email: String, code: String): AuthResponse = client.post("$baseUrl/api/v1/auth/otp/verify") {
+    override suspend fun verifyOtp(email: String, code: String): AuthResponse {
+        val response = client.post("$baseUrl/api/v1/auth/otp/verify") {
         contentType(ContentType.Application.Json)
         setBody(OtpVerifyRequest(email, code))
-    }.body<AuthResponse>().also {
+        }
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.TooManyRequests) {
+            val reason = runCatching { response.body<ApiError>().code }.getOrDefault("wrong_code")
+            throw SignInCodeRejected(reason)
+        }
+        check(response.status.isSuccess()) { "Sign-in request failed" }
+        return response.body<AuthResponse>().also {
         sessionGeneration++
         session = it
+        }
     }
     override suspend fun events(): List<EventDto> = authorizedGet("/api/v1/events")
     override suspend fun hall(id: String): HallDto = authorizedGet("/api/v1/halls/$id")

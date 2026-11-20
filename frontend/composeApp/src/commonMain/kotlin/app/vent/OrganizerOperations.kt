@@ -337,7 +337,9 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onS
         previewReady = false
         kotlinx.coroutines.delay(2_000)
         previewReady = true
+        dispatch(VentAction.PreviewEventAccent(null))
     }
+    DisposableEffect(Unit) { onDispose { dispatch(VentAction.PreviewEventAccent(null)) } }
     VentTheme(accent = previewSeed?.let { Color(it) }) {
     Column(verticalArrangement = Arrangement.spacedBy(space.md)) {
     OpsCard {
@@ -373,7 +375,7 @@ private fun SetupOperations(ui: VentUiState, dispatch: (VentAction) -> Unit, onS
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(space.sm)) {
             app.vent.domain.EventPalette.seeds.forEach { (name, seed) ->
                 val accents = app.vent.domain.EventPalette.accents(seed, true)
-                OutlinedCard(onClick = { previewSeed = seed },
+                OutlinedCard(onClick = { previewSeed = seed; dispatch(VentAction.PreviewEventAccent(seed)) },
                     modifier = Modifier.width(space.touch * 2).heightIn(min = space.touch * 2)) {
                     Column(Modifier.padding(space.sm), verticalArrangement = Arrangement.spacedBy(space.sm)) {
                         Text(name, style = MaterialTheme.typography.labelLarge)

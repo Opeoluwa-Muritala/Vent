@@ -50,6 +50,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 
 @Serializable internal sealed interface VentRoute : NavKey
 @Serializable internal data object EventRoute : VentRoute
@@ -148,7 +157,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
         val items = if (uiState.role == DemoRole.ATTENDEE) attendeeItems else organizerItems
         val inOperations = uiState.role == DemoRole.ORGANIZER &&
             uiState.screen in setOf(VentScreen.DOOR, VentScreen.OCCUPANCY, VentScreen.CONTROLS)
-        VentTheme(accent = uiState.eventAccent?.let { androidx.compose.ui.graphics.Color(it) }) {
+        VentTheme(accent = (uiState.previewAccent ?: uiState.eventAccent)?.let { androidx.compose.ui.graphics.Color(it) }) {
         ProvideAttendeePass(api, authState.events.firstOrNull()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val expanded = maxWidth >= 720.dp
@@ -199,8 +208,21 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             onAction(VentAction.Navigate(it))
         }
     }
+    val motion = remember { SessionMotion() }
+    CompositionLocalProvider(LocalSessionMotion provides motion) {
     NavDisplay(
         backStack = backStack,
+        transitionSpec = {
+            (scaleIn(tween(250, easing = FastOutSlowInEasing), initialScale = .88f, transformOrigin = motion.origin) +
+                fadeIn(tween(250))) togetherWith fadeOut(tween(200))
+        },
+        popTransitionSpec = {
+            fadeIn(tween(250)) togetherWith (scaleOut(tween(250, easing = FastOutSlowInEasing),
+                targetScale = .88f, transformOrigin = motion.origin) + fadeOut(tween(200)))
+        },
+        predictivePopTransitionSpec = {
+            slideInHorizontally(tween(250)) { -it / 4 } togetherWith slideOutHorizontally(tween(250)) { it }
+        },
         onBack = {
             if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
         },
@@ -232,6 +254,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
             entry<ExpiredRoute> { SummitScreen(VentScreen.EXPIRED, uiState, onAction) }
         },
     )
+    }
 }
 
 private fun VentScreen.toRoute(): VentRoute = when (this) {

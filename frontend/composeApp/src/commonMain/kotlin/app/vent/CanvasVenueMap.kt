@@ -164,13 +164,14 @@ internal fun CanvasVenueMap(ui: VentUiState, locateRequest: Int, onSeatClick: (S
                             yours -> colors.primary
                             selected -> colors.secondary
                             taken -> colors.surfaceContainerHigh
-                            vip -> colors.tertiaryContainer
+                            vip -> colors.tertiary
                             else -> colors.surface
                         }
                         val ink = when {
                             yours -> colors.onPrimary
                             selected -> colors.onSecondary
                             blocked -> colors.error
+                            vip -> colors.onTertiary
                             else -> colors.onSurface
                         }
                         val corner = entry.center - Offset(visual / 2, visual / 2)
@@ -187,14 +188,15 @@ internal fun CanvasVenueMap(ui: VentUiState, locateRequest: Int, onSeatClick: (S
                             else -> null
                         }
                         if (icon != null) {
-                            val iconSize = visual * .6f
-                            withTransform({ translate(entry.center.x - iconSize / 2, entry.center.y - iconSize / 2) }) {
+                            val iconSize = visual * if (zoom > 1.5f) .4f else .6f
+                            val iconY = if (zoom > 1.5f) corner.y + stroke * 3 else entry.center.y - iconSize / 2
+                            withTransform({ translate(entry.center.x - iconSize / 2, iconY) }) {
                                 with(icon) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(ink)) }
                             }
                         }
                         if (zoom > 1.5f) {
                             val text = measurer.measure(seat.label, labelStyle.copy(color = ink))
-                            drawText(text, topLeft = Offset(entry.center.x - text.size.width / 2f, corner.y + visual + stroke))
+                            drawText(text, topLeft = Offset(entry.center.x - text.size.width / 2f, corner.y + visual - text.size.height - stroke))
                         }
                     }
                 }
