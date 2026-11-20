@@ -22,6 +22,42 @@ class VentViewModelTest {
     @BeforeTest fun setUp() { Dispatchers.setMain(dispatcher) }
     @AfterTest fun tearDown() { Dispatchers.resetMain() }
 
+    @Test fun startingAnotherSessionEndsThePreviousLiveSession() = runTest {
+        val store = FakeLocalStore()
+        val model = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.SetSessionPhase(SummitSession.KEYNOTE, SessionPhase.LIVE))
+        model.onAction(VentAction.SetSessionPhase(SummitSession.SECURITY, SessionPhase.LIVE))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, model.uiState.value.sessionDetails.values.count { it.phase == SessionPhase.LIVE })
+        assertEquals(SessionPhase.ENDED, store.saved.settings.sessionDetails[SummitSession.KEYNOTE]?.phase)
+    }
+
+    @Test fun attendeeCannotStartSessionsOrRateUpcomingSessions() = runTest {
+        val model = VentViewModel(FakeLocalStore(), attendeeOnly = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        model.onAction(VentAction.SetSessionPhase(SummitSession.KEYNOTE, SessionPhase.LIVE))
+        model.onAction(VentAction.RateSession(SummitSession.KEYNOTE, 5))
+        assertTrue(model.uiState.value.sessionDetails.isEmpty())
+        assertTrue(model.uiState.value.sessionRatings.isEmpty())
+    }
+
+    @Test fun personalReminderAndRatingSurviveReload() = runTest {
+        val store = FakeLocalStore()
+        val organizer = VentViewModel(store, startAsOrganizer = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        organizer.onAction(VentAction.SetSessionPhase(SummitSession.KEYNOTE, SessionPhase.ENDED))
+        dispatcher.scheduler.advanceUntilIdle()
+        val attendee = VentViewModel(store, attendeeOnly = true)
+        dispatcher.scheduler.advanceUntilIdle()
+        val timestamp = kotlin.time.Clock.System.now().toEpochMilliseconds() + 60_000
+        attendee.onAction(VentAction.SetReminder(SummitSession.KEYNOTE, timestamp))
+        attendee.onAction(VentAction.RateSession(SummitSession.KEYNOTE, 4))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(timestamp, store.saved.settings.reminders[SummitSession.KEYNOTE])
+        assertEquals(4, store.saved.settings.sessionRatings[SummitSession.KEYNOTE])
+    }
+
     @Test fun eventDaysPersistAndCannotHideAnExistingSession() = runTest {
         val store = FakeLocalStore()
         val model = VentViewModel(store, startAsOrganizer = true)

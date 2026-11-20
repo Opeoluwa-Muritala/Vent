@@ -82,7 +82,8 @@ internal fun EditSessionDialog(initial: SessionDetails, close: () -> Unit, creat
                 if (title.isBlank() || !validSessionTimeRange(time)) "Add a title and time to continue."
                 else "Add a hall and speakers to continue.",
                 style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button({ save(SessionDetails(title.trim(), time.trim(), hall.trim(), speaker.trim(), headerImage, day)) },
+            Button({ save(initial.copy(title = title.trim(), time = time.trim(), room = hall.trim(),
+                speaker = speaker.trim(), headerImage = headerImage, day = day)) },
                 Modifier.fillMaxWidth().height(space.action), enabled = valid) {
                 Text(if (creating) "Create session" else "Save")
             }

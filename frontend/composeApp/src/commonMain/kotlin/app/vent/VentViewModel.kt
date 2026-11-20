@@ -14,6 +14,8 @@ private fun Set<String>.toggled(item: String): Set<String> = if (item in this) t
 
 data class VentUiState(
     val sessionDetails: Map<SummitSession, SessionDetails> = emptyMap(),
+    val sessionRatings: Map<SummitSession, Int> = emptyMap(),
+    val reminders: Map<SummitSession, Long> = emptyMap(),
     val questDefinitions: List<QuestDefinition> = emptyList(),
     val questResponses: Map<String, Map<String, String>> = emptyMap(),
     val seatAssignments: Map<SummitSession, Map<String, String>> = emptyMap(),
@@ -46,6 +48,9 @@ data class VentUiState(
 )
 
 sealed interface VentAction {
+    data class SetSessionPhase(val session: SummitSession, val phase: SessionPhase) : VentAction
+    data class RateSession(val session: SummitSession, val rating: Int) : VentAction
+    data class SetReminder(val session: SummitSession, val timestamp: Long?) : VentAction
     data class SaveSessionDetails(val session: SummitSession, val details: SessionDetails) : VentAction
     data class CreateSession(val details: SessionDetails) : VentAction
     data class PublishQuest(val quest: QuestDefinition) : VentAction
@@ -132,6 +137,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         customQuests = saved.settings.customQuests,
                         attendees = saved.settings.registeredAttendees,
                         sessionDetails = saved.settings.sessionDetails,
+                        sessionRatings = saved.settings.sessionRatings,
+                        reminders = saved.settings.reminders,
                         questDefinitions = saved.settings.questDefinitions,
                         questResponses = saved.settings.questResponses,
                         seatAssignments = saved.settings.seatAssignments,
@@ -166,6 +173,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                         customQuests = saved.settings.customQuests,
                         attendees = saved.settings.registeredAttendees,
                         sessionDetails = saved.settings.sessionDetails,
+                        sessionRatings = saved.settings.sessionRatings,
+                        reminders = saved.settings.reminders,
                         questDefinitions = saved.settings.questDefinitions,
                         questResponses = saved.settings.questResponses,
                         seatAssignments = saved.settings.seatAssignments,
@@ -183,11 +192,36 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
     override fun onIntent(action: VentAction) {
         val before = mutableState.value
         when (action) {
+            is VentAction.SetSessionPhase -> if (before.role == DemoRole.ORGANIZER &&
+                action.session in (SummitSession.entries + before.sessionDetails.keys)) {
+                val details = before.sessionDetails[action.session] ?: SessionDetails(
+                    action.session.title, action.session.time, action.session.room, action.session.speaker)
+                val updated = if (action.phase == SessionPhase.LIVE) {
+                    before.sessionDetails.mapValues { (_, entry) ->
+                        if (entry.phase == SessionPhase.LIVE) entry.copy(phase = SessionPhase.ENDED) else entry
+                    }
+                } else before.sessionDetails
+                mutableState.update { it.copy(sessionDetails = updated + (action.session to details.copy(phase = action.phase))) }
+                persist()
+            }
+            is VentAction.RateSession -> if (before.role == DemoRole.ATTENDEE && action.rating in 1..5 &&
+                before.sessionDetails[action.session]?.phase == SessionPhase.ENDED) {
+                mutableState.update { it.copy(sessionRatings = it.sessionRatings + (action.session to action.rating),
+                    message = "Rating saved: ${action.rating} of 5") }
+                persist()
+            }
+            is VentAction.SetReminder -> if (before.role == DemoRole.ATTENDEE &&
+                action.session in (SummitSession.entries + before.sessionDetails.keys) &&
+                (action.timestamp == null || action.timestamp > kotlin.time.Clock.System.now().toEpochMilliseconds())) {
+                mutableState.update { it.copy(reminders = if (action.timestamp == null) it.reminders - action.session
+                    else it.reminders + (action.session to action.timestamp), message = if (action.timestamp == null) "Reminder removed" else "Reminder saved") }
+                persist()
+            }
             is VentAction.CreateSession -> if (before.role == DemoRole.ORGANIZER && action.details.isValid(before.eventDays)) {
                 val index = before.sessionDetails.keys.mapNotNull { it.name.removePrefix("LOCAL_").toIntOrNull() }.maxOrNull() ?: 0
                 if (index < 1000) {
                     val session = SummitSession("LOCAL_${index + 1}")
-                    mutableState.update { it.copy(sessionDetails = it.sessionDetails + (session to action.details), screen = VentScreen.SCHEDULE) }
+                    mutableState.update { it.copy(sessionDetails = it.sessionDetails + (session to action.details.copy(phase = SessionPhase.UPCOMING)), screen = VentScreen.SCHEDULE) }
                     persist()
                 }
             }
@@ -207,7 +241,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
             is VentAction.SaveSessionDetails -> if (before.role == DemoRole.ORGANIZER) {
                 val details = action.details
                 if (details.isValid(before.eventDays) && (action.session in SummitSession.entries || action.session in before.sessionDetails)) {
-                    mutableState.update { it.copy(sessionDetails = it.sessionDetails + (action.session to details)) }
+                    val phase = before.sessionDetails[action.session]?.phase ?: SessionPhase.UPCOMING
+                    mutableState.update { it.copy(sessionDetails = it.sessionDetails + (action.session to details.copy(phase = phase))) }
                     persist()
                 }
             }
@@ -391,7 +426,8 @@ class VentViewModel(private val localStore: VentLocalStore, private val attendee
                 state.layoutPublication, state.seatSelectionOpen, state.bookmarks, state.preferences, state.activeGate,
                 state.session, state.seating + (state.session to state.sessionSeating()), state.customQuests, state.attendees,
                 state.sessionDetails, state.questDefinitions, state.questResponses, state.seatAssignments,
-                eventDays = state.eventDays, eventAccent = state.eventAccent))
+                eventDays = state.eventDays, eventAccent = state.eventAccent,
+                sessionRatings = state.sessionRatings, reminders = state.reminders))
         expectedWrite = localState
         writes.trySend(localState)
     }

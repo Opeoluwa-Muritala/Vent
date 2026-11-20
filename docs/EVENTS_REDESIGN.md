@@ -41,10 +41,11 @@ This is not a claim of full completion of all 37 screen states.
 - The repository has no iOS application host, Info.plist, or launch asset
   catalog. The iOS launch screen must be connected in that host on macOS.
   The existing iOS camera implementation remains a manual-code fallback.
-- The current UI model does not expose a session lifecycle or authenticated
-  pass QR payload. Live/upcoming/ended variants, a real scannable pass, brightness
-  boost, reminder scheduling, and rating submission still need their product
-  integrations. Do not substitute fabricated pass codes or session status.
+- Session lifecycle is organizer-controlled and persisted: starting a session
+  ends the previous live session. Schedule/detail screens use upcoming, live,
+  and ended states. Personal time-wheel reminders and session ratings persist
+  per device. Reminder banners currently require the app to remain open.
+  Authenticated pass QR issuance and brightness support still need integration.
 - Android camera torch control uses the device's actual torch state, handles
   missing flash hardware and failed requests, and turns off on disposal.
   Camera permission is rechecked when returning from system settings.

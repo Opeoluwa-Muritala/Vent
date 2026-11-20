@@ -1,10 +1,14 @@
 package app.vent
 
 @kotlinx.serialization.Serializable
+enum class SessionPhase { UPCOMING, LIVE, ENDED }
+
+@kotlinx.serialization.Serializable
 data class SessionDetails(
     val title: String, val time: String, val room: String, val speaker: String,
     val headerImage: String? = null,
     val day: Int = 1,
+    val phase: SessionPhase = SessionPhase.UPCOMING,
 )
 
 internal const val MAX_EVENT_DAYS = 30

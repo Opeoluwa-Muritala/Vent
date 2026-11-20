@@ -102,6 +102,8 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
     val session = uiState.session
     val details = uiState.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
     var editing by rememberSaveable(session) { mutableStateOf(false) }
+    var reminder by rememberSaveable(session) { mutableStateOf(false) }
+    var rating by rememberSaveable(session) { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = space.xxl),
         verticalArrangement = Arrangement.spacedBy(space.lg)) {
         item { EventHero(session, details) { onAction(VentAction.Navigate(VentScreen.SCHEDULE)) } }
@@ -117,12 +119,33 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
                     DetailLine(Icons.Outlined.Group, "SPEAKERS", details.speaker)
                     if (uiState.role == DemoRole.ORGANIZER) {
                         Button({ editing = true }, Modifier.fillMaxWidth()) { Text("Edit session details") }
+                        SessionStatus(details.phase)
+                        if (details.phase != SessionPhase.ENDED) Button({
+                            onAction(VentAction.SetSessionPhase(session,
+                                if (details.phase == SessionPhase.LIVE) SessionPhase.ENDED else SessionPhase.LIVE))
+                        }, Modifier.fillMaxWidth().height(space.action)) {
+                            Text(if (details.phase == SessionPhase.LIVE) "End session" else "Start session")
+                        }
                     } else {
                         DetailLine(Icons.Outlined.Chair, "ASSIGNED SEAT", uiState.confirmedSeat.ifBlank { "Not selected" })
                         Text("What to do here", style = MaterialTheme.typography.titleLarge)
-                        Button({ onAction(VentAction.Navigate(VentScreen.SCANNER)) },
-                            Modifier.fillMaxWidth().height(space.action)) { Text("Check in") }
+                        SessionStatus(details.phase)
+                        when (details.phase) {
+                            SessionPhase.LIVE -> Button({ onAction(VentAction.Navigate(VentScreen.SCANNER)) },
+                                Modifier.fillMaxWidth().height(space.action)) { Text("Check in") }
+                            SessionPhase.UPCOMING -> {
+                                Text("Opens 10 minutes before the session.")
+                                Button({ reminder = true }, Modifier.fillMaxWidth().height(space.action)) { Text("Add reminder") }
+                            }
+                            SessionPhase.ENDED -> Button({ rating = true },
+                                Modifier.fillMaxWidth().height(space.action)) {
+                                Text(uiState.sessionRatings[session]?.let { "Your rating: $it / 5" } ?: "Rate this session")
+                            }
+                        }
+                        if (details.phase == SessionPhase.LIVE) OutlinedButton({ reminder = true },
+                            Modifier.fillMaxWidth().height(space.action)) { Text("Add reminder") }
                     }
+                    if (details.phase != SessionPhase.ENDED || uiState.role == DemoRole.ORGANIZER)
                     OutlinedButton({ onAction(VentAction.Navigate(VentScreen.SEAT)) }, Modifier.fillMaxWidth().height(space.action)) {
                         Icon(Icons.Outlined.Chair, null); Spacer(Modifier.width(space.sm))
                         Text(if (uiState.role == DemoRole.ORGANIZER) "Edit seating" else if (uiState.confirmedSeat.isBlank()) "Select seat" else "View or change seat")
@@ -131,6 +154,23 @@ internal fun EventDetailScreen(uiState: VentUiState, onAction: (VentAction) -> U
             }
         }
     }
+    if (reminder) ReminderSheet({ reminder = false }) { onAction(VentAction.SetReminder(session, it)) }
+    if (rating) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { rating = false },
+        title = { Text("Rate this session") },
+        text = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                (1..5).forEach { value ->
+                    androidx.compose.material3.FilledTonalButton({
+                        onAction(VentAction.RateSession(session, value))
+                        rating = false
+                    }, contentPadding = PaddingValues(space.sm)) { Text("$value") }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton({ rating = false }) { Text("Cancel") } },
+    )
     if (editing && uiState.role == DemoRole.ORGANIZER) EditSessionDialog(details, { editing = false }, eventDays = uiState.eventDays,
         halls = (SummitSession.entries + uiState.sessionDetails.keys).map { uiState.sessionDetails[it]?.room ?: it.room }.distinct()) {
         onAction(VentAction.SaveSessionDetails(session, it))

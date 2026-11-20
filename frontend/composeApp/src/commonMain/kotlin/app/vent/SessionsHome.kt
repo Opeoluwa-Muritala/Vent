@@ -86,31 +86,18 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
                         item(key = "time:$time") { Text(time, style = MaterialTheme.typography.labelLarge) }
                         items(concurrent, key = { it.name }) { session ->
                             val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
-                            if (session == SummitSession.KEYNOTE) {
-                                KeynoteCard(details, sessionColors, sessionBorder, sessionShadow) { dispatch(VentAction.OpenSession(session)) }
-                            } else {
-                                Card(
-                                    onClick = { dispatch(VentAction.OpenSession(session)) },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = space.heroIcon + space.lg),
-                                    shape = MaterialTheme.shapes.large,
-                                    colors = sessionColors,
-                                    border = sessionBorder,
-                                ) {
-                                    Row(Modifier.fillMaxSize().padding(space.lg), verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(space.md)) {
-                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(space.sm)) {
-                                            Text(details.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
-                                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                            Text("${details.room} · ${details.speaker}", style = MaterialTheme.typography.bodySmall,
-                                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                        }
-                                        if (!organizer) IconButton({ dispatch(VentAction.Bookmark(details.title)) }) {
-                                            Icon(if (details.title in ui.bookmarks) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                                                "Save session", tint = if (details.title in ui.bookmarks) scheme.secondary else scheme.onSurfaceVariant)
-                                        }
-                                    }
-                                }
-                            }
+                            SessionScheduleCard(
+                                details = details,
+                                featured = session == SummitSession.KEYNOTE,
+                                organizer = organizer,
+                                bookmarked = details.title in ui.bookmarks,
+                                onBookmark = { dispatch(VentAction.Bookmark(details.title)) },
+                                onOpen = { dispatch(VentAction.OpenSession(session)) },
+                                onCheckIn = {
+                                    dispatch(VentAction.OpenSession(session))
+                                    dispatch(VentAction.Navigate(VentScreen.SCANNER))
+                                },
+                            )
                         }
                     }
                 }

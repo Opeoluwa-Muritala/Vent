@@ -173,6 +173,7 @@ fun VentApp(allowLocalOrganizer: Boolean = false) {
                 ) { padding -> Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { VentSurface(uiState,onAction,false,authState.email,authViewModel::signOut) } }
             }
         }
+        SessionReminderHost(uiState, onAction)
         }
     }
 }
