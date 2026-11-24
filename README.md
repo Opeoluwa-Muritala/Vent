@@ -9,7 +9,7 @@ The app uses Kotlin **2.4.21**, Compose Multiplatform, and a Ktor API backed by 
 ## Demo video and Android APK
 
 - [Watch the Android organizer demo](docs/vent-android-demo.mp4). The recording shows the session agenda, clock picker, quest editor, occupancy view, and event setup on a physical Android phone.
-- [Download the Android debug APK from GitHub Actions](https://github.com/Opeoluwa-Muritala/Vent/actions/workflows/ci.yml). Open a workflow run that built the Android target, download **vent-ubuntu-artifacts**, then extract `frontend/androidApp/build/outputs/apk/debug/androidApp-debug.apk`. GitHub may require sign-in to download workflow artifacts.
+- [Download the Android debug APK from GitHub Actions](https://github.com/Opeoluwa-Muritala/Vent/actions/workflows/ci.yml). Open a successful workflow run, download **vent-android-apk**, and install the extracted `androidApp-debug.apk` with `adb install -r androidApp-debug.apk`. GitHub may require sign-in to download workflow artifacts.
 - If you have the APK, install it with `adb install -r androidApp-debug.apk` and use the offline demo accounts below.
 
 ## Choose a launch path
@@ -30,7 +30,7 @@ git clone https://github.com/Opeoluwa-Muritala/Vent.git
 cd Vent
 ```
 
-Use JDK 17 and the included Gradle wrapper. Use `./gradlew` on macOS or Linux and `.\gradlew.bat` in Windows PowerShell. Install Android SDK Platform 37 for the frontend Gradle build. Android Studio can install it through SDK Manager and generate `local.properties` for your SDK location. The first build downloads Gradle and dependencies.
+Use JDK 21 and the included Gradle wrapper. Use `./gradlew` on macOS or Linux and `.\gradlew.bat` in Windows PowerShell. Install Android SDK Platform 37 for the frontend Gradle build. Android Studio can install it through SDK Manager and generate `local.properties` for your SDK location. The first build downloads Gradle and dependencies.
 
 ## Android quick start
 

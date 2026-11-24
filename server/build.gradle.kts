@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.compile.JavaCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     application
     alias(libs.plugins.kotlin.multiplatform) apply false
@@ -6,7 +9,14 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
 }
-kotlin { jvmToolchain(if (rootProject == project) JavaVersion.current().majorVersion.toInt() else 17) }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
+}
 application { mainClass.set("app.vent.server.MainKt") }
 dependencies {
     implementation(project(":shared-domain"))
