@@ -23,7 +23,13 @@ data class AppConfig(
                 databasePassword = database.third,
                 jwtSecret = secret,
                 demoOtpLogging = env["VENT_DEMO_OTP_LOGGING"].equals("true", ignoreCase = true),
-                allowedOrigins = env["ALLOWED_ORIGINS"].orEmpty().split(',').map(String::trim).filter(String::isNotEmpty).toSet(),
+                allowedOrigins =
+                    env["ALLOWED_ORIGINS"]
+                        .orEmpty()
+                        .split(',')
+                        .map(String::trim)
+                        .filter(String::isNotEmpty)
+                        .toSet(),
             )
         }
 
@@ -33,7 +39,8 @@ data class AppConfig(
             val uri = URI(raw)
             require(uri.scheme == "postgres" || uri.scheme == "postgresql") { "DATABASE_URL must use PostgreSQL" }
             val credentials = uri.userInfo.orEmpty().split(':', limit = 2)
-            val jdbc = "jdbc:postgresql://${uri.host}:${if (uri.port > 0) uri.port else 5432}${uri.path}" + (uri.query?.let { "?$it" } ?: "")
+            val jdbc =
+                "jdbc:postgresql://${uri.host}:${if (uri.port > 0) uri.port else 5432}${uri.path}" + (uri.query?.let { "?$it" } ?: "")
             return Triple(jdbc, credentials.getOrElse(0) { "" }, credentials.getOrElse(1) { "" })
         }
     }

@@ -14,24 +14,59 @@ import javax.crypto.spec.SecretKeySpec
 private const val ISSUER = "vent-api"
 private const val AUDIENCE = "vent-clients"
 
-data class UserPrincipal(val userId: String) : Principal
+data class UserPrincipal(
+    val userId: String,
+) : Principal
 
-data class TokenPair(val accessToken: String, val refreshToken: String, val expiresInSeconds: Long)
+data class TokenPair(
+    val accessToken: String,
+    val refreshToken: String,
+    val expiresInSeconds: Long,
+)
 
-class TokenService(secret: String) {
+class TokenService(
+    secret: String,
+) {
     val algorithm: Algorithm = Algorithm.HMAC256(secret)
     private val secretBytes = secret.toByteArray(Charsets.UTF_8)
     private val random = SecureRandom()
-    fun accessToken(userId: String, now: Instant = Instant.now()): Pair<String, Long> {
+
+    fun accessToken(
+        userId: String,
+        now: Instant = Instant.now(),
+    ): Pair<String, Long> {
         val ttl = 60 * 60L
-        return JWT.create().withIssuer(ISSUER).withAudience(AUDIENCE).withSubject(userId).withJWTId(UUID.randomUUID().toString())
-            .withIssuedAt(now).withExpiresAt(now.plusSeconds(ttl)).sign(algorithm) to ttl
+        return JWT
+            .create()
+            .withIssuer(ISSUER)
+            .withAudience(AUDIENCE)
+            .withSubject(userId)
+            .withJWTId(UUID.randomUUID().toString())
+            .withIssuedAt(now)
+            .withExpiresAt(now.plusSeconds(ttl))
+            .sign(algorithm) to ttl
     }
+
     fun refreshToken(): String = ByteArray(48).also(random::nextBytes).let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
-    fun hashRefreshToken(token: String): String = MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
-    fun hashOtp(email: String, code: String): String = keyedHash("otp:$email:$code")
+
+    fun hashRefreshToken(token: String): String =
+        MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") {
+            "%02x".format(it)
+        }
+
+    fun hashOtp(
+        email: String,
+        code: String,
+    ): String = keyedHash("otp:$email:$code")
+
     fun hashRemoteAddress(address: String): String = keyedHash("remote:$address")
-    fun verifier() = JWT.require(algorithm).withIssuer(ISSUER).withAudience(AUDIENCE).build()
+
+    fun verifier() =
+        JWT
+            .require(algorithm)
+            .withIssuer(ISSUER)
+            .withAudience(AUDIENCE)
+            .build()
 
     private fun keyedHash(value: String): String {
         val mac = Mac.getInstance("HmacSHA256")

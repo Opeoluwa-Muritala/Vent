@@ -3,8 +3,8 @@ package app.vent.server
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class ConfigurationTest {
     @Test fun rejectsShortJwtSecrets() {
@@ -12,7 +12,13 @@ class ConfigurationTest {
     }
 
     @Test fun parsesRailwayPostgresUrlWithoutLoggingCredentials() {
-        val config = AppConfig.fromEnvironment(mapOf("JWT_SECRET" to "01234567890123456789012345678901", "DATABASE_URL" to "postgresql://vent:secret@db.example:5432/vent"))
+        val config =
+            AppConfig.fromEnvironment(
+                mapOf(
+                    "JWT_SECRET" to "01234567890123456789012345678901",
+                    "DATABASE_URL" to "postgresql://vent:secret@db.example:5432/vent",
+                ),
+            )
         assertEquals("jdbc:postgresql://db.example:5432/vent", config.databaseUrl)
         assertEquals("vent", config.databaseUser)
         assertEquals("secret", config.databasePassword)

@@ -32,9 +32,12 @@ data class SummitSettings(
 ) {
     // Older snapshots may have saved the original seeded address explicitly.
     val registeredAttendees: Set<String>
-        get() = if ("attendee@example.com" in attendees) {
-            attendees - "attendee@example.com" + "attendee@vent.demo"
-        } else attendees
+        get() =
+            if ("attendee@example.com" in attendees) {
+                attendees - "attendee@example.com" + "attendee@vent.demo"
+            } else {
+                attendees
+            }
 }
 
 @Serializable
@@ -47,7 +50,9 @@ data class VentLocalState(
 
 interface VentLocalStore {
     fun changes(): kotlinx.coroutines.flow.Flow<VentLocalState> = kotlinx.coroutines.flow.emptyFlow()
+
     suspend fun load(): VentLocalState
+
     suspend fun save(state: VentLocalState)
 }
 

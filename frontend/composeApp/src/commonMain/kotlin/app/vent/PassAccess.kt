@@ -8,14 +8,27 @@ import app.vent.data.VentApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
-internal data class PassState(val pass: AttendeePassDto? = null, val loading: Boolean = false, val error: String? = null)
+internal data class PassState(
+    val pass: AttendeePassDto? = null,
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
 internal val LocalAttendeePass = staticCompositionLocalOf { PassState() }
 internal val LocalPassRetry = staticCompositionLocalOf<() -> Unit> { {} }
-internal fun interface PassVerifier { suspend fun verify(token: String): VerifiedPassDto }
+
+internal fun interface PassVerifier {
+    suspend fun verify(token: String): VerifiedPassDto
+}
+
 internal val LocalPassVerifier = staticCompositionLocalOf<PassVerifier?> { null }
 
 @Composable
-internal fun ProvideAttendeePass(api: VentApi, event: EventDto?, content: @Composable () -> Unit) {
+internal fun ProvideAttendeePass(
+    api: VentApi,
+    event: EventDto?,
+    content: @Composable () -> Unit,
+) {
     var state by remember(event?.id) { mutableStateOf(PassState()) }
     var attempt by remember(event?.id) { mutableStateOf(0) }
     LaunchedEffect(api, event?.id, attempt) {
@@ -33,11 +46,16 @@ internal fun ProvideAttendeePass(api: VentApi, event: EventDto?, content: @Compo
             delay(300_000)
         }
     }
-    val verifier = remember(api, event?.id) {
-        event?.let { selected -> PassVerifier { token -> api.verifyEventPass(selected.id, token) } }
-    }
-    CompositionLocalProvider(LocalAttendeePass provides state, LocalPassRetry provides { attempt++ },
-        LocalPassVerifier provides verifier, content = content)
+    val verifier =
+        remember(api, event?.id) {
+            event?.let { selected -> PassVerifier { token -> api.verifyEventPass(selected.id, token) } }
+        }
+    CompositionLocalProvider(
+        LocalAttendeePass provides state,
+        LocalPassRetry provides { attempt++ },
+        LocalPassVerifier provides verifier,
+        content = content,
+    )
 }
 
 @Composable

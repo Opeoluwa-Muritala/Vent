@@ -7,11 +7,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 
-private tailrec fun passActivity(context: Context): Activity? = when (context) {
-    is Activity -> context
-    is ContextWrapper -> if (context.baseContext !== context) passActivity(context.baseContext) else null
-    else -> null
-}
+private tailrec fun passActivity(context: Context): Activity? =
+    when (context) {
+        is Activity -> context
+        is ContextWrapper -> if (context.baseContext !== context) passActivity(context.baseContext) else null
+        else -> null
+    }
 
 @Composable
 internal actual fun PassBrightnessBoost(enabled: Boolean) {

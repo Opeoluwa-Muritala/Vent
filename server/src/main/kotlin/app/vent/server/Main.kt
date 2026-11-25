@@ -1,8 +1,8 @@
 package app.vent.server
 
 import app.vent.api.ApiError
-import app.vent.api.HealthResponse
 import app.vent.api.AuthResponse
+import app.vent.api.HealthResponse
 import app.vent.api.OtpRequest
 import app.vent.api.OtpRequestResponse
 import app.vent.api.OtpVerifyRequest
@@ -22,10 +22,10 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
 import io.ktor.server.plugins.origin
-import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
@@ -61,21 +61,60 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
         header("Referrer-Policy", "strict-origin-when-cross-origin")
         header("Cache-Control", "no-store")
     }
-    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = false; explicitNulls = false; encodeDefaults = true }) }
+    install(ContentNegotiation) {
+        json(
+            Json {
+                ignoreUnknownKeys = false
+                explicitNulls = false
+                encodeDefaults = true
+            },
+        )
+    }
     install(StatusPages) {
-        exception<OtpRateLimited> { call, _ -> call.respond(HttpStatusCode.TooManyRequests, ApiError("rate_limited", "Too many tries. Wait a minute and try again.")) }
-        exception<Forbidden> { call, _ -> call.respond(HttpStatusCode.Forbidden, ApiError("forbidden", "You do not have permission for this action")) }
-        exception<IllegalArgumentException> { call, error -> call.respond(HttpStatusCode.BadRequest, ApiError(error.message ?: "invalid_request", "The request is invalid")) }
-        exception<Throwable> { call, _ -> call.respond(HttpStatusCode.InternalServerError, ApiError("internal_error", "The request could not be completed")) }
+        exception<OtpRateLimited> {
+            call,
+            _,
+            ->
+            call.respond(HttpStatusCode.TooManyRequests, ApiError("rate_limited", "Too many tries. Wait a minute and try again."))
+        }
+        exception<Forbidden> {
+            call,
+            _,
+            ->
+            call.respond(HttpStatusCode.Forbidden, ApiError("forbidden", "You do not have permission for this action"))
+        }
+        exception<IllegalArgumentException> { call, error ->
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ApiError(
+                    error.message ?: "invalid_request",
+                    "The request is invalid",
+                ),
+            )
+        }
+        exception<Throwable> {
+            call,
+            _,
+            ->
+            call.respond(HttpStatusCode.InternalServerError, ApiError("internal_error", "The request could not be completed"))
+        }
     }
     install(CORS) {
-        allowMethod(HttpMethod.Get); allowMethod(HttpMethod.Post); allowMethod(HttpMethod.Put); allowMethod(HttpMethod.Delete)
-        allowHeader(HttpHeaders.Authorization); allowHeader(HttpHeaders.ContentType)
+        allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete)
+        allowHeader(HttpHeaders.Authorization)
+        allowHeader(HttpHeaders.ContentType)
         config.allowedOrigins.forEach { origin ->
             val uri = java.net.URI(origin)
             require(
-                uri.scheme in setOf("http", "https") && uri.host != null && uri.userInfo == null &&
-                    uri.path.isNullOrEmpty() && uri.query == null && uri.fragment == null,
+                uri.scheme in setOf("http", "https") &&
+                    uri.host != null &&
+                    uri.userInfo == null &&
+                    uri.path.isNullOrEmpty() &&
+                    uri.query == null &&
+                    uri.fragment == null,
             ) { "ALLOWED_ORIGINS must contain HTTP or HTTPS origins without paths" }
             allowHost(uri.rawAuthority, schemes = listOf(uri.scheme))
         }
@@ -88,7 +127,11 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
         jwt("auth-jwt") {
             realm = "vent"
             verifier(tokenService.verifier())
-            validate { credential -> credential.payload.subject?.takeIf { it.isNotBlank() }?.let(::UserPrincipal) }
+            validate { credential ->
+                credential.payload.subject
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(::UserPrincipal)
+            }
             challenge { _, _ -> call.respond(HttpStatusCode.Unauthorized, ApiError("unauthorized", "Authentication is required")) }
         }
     }
@@ -104,48 +147,68 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
                 post("/auth/otp/verify") {
                     val request = call.receive<OtpVerifyRequest>()
                     when (val result = authService.verifyCode(request.email, request.code)) {
-                        is OtpVerification.Success -> call.respond(AuthResponse(result.tokens.accessToken, result.tokens.refreshToken, result.tokens.expiresInSeconds))
-                        is OtpVerification.Wrong -> call.respond(HttpStatusCode.Unauthorized, ApiError("wrong_code", "That code isn't right. ${result.triesLeft} tries left."))
-                        OtpVerification.Expired -> call.respond(HttpStatusCode.Unauthorized, ApiError("expired_code", "That code has expired. Send a new one."))
-                        OtpVerification.Locked -> call.respond(HttpStatusCode.TooManyRequests, ApiError("code_locked", "Too many wrong tries. Send a new code."))
+                        is OtpVerification.Success ->
+                            call.respond(
+                                AuthResponse(result.tokens.accessToken, result.tokens.refreshToken, result.tokens.expiresInSeconds),
+                            )
+                        is OtpVerification.Wrong ->
+                            call.respond(
+                                HttpStatusCode.Unauthorized,
+                                ApiError("wrong_code", "That code isn't right. ${result.triesLeft} tries left."),
+                            )
+                        OtpVerification.Expired ->
+                            call.respond(
+                                HttpStatusCode.Unauthorized,
+                                ApiError("expired_code", "That code has expired. Send a new one."),
+                            )
+                        OtpVerification.Locked ->
+                            call.respond(
+                                HttpStatusCode.TooManyRequests,
+                                ApiError("code_locked", "Too many wrong tries. Send a new code."),
+                            )
                     }
                 }
                 post("/auth/refresh") {
                     val request = call.receive<RefreshRequest>()
-                    val pair = authService.refresh(request.refreshToken)
-                        ?: return@post call.respond(HttpStatusCode.Unauthorized, ApiError("invalid_refresh_token", "Sign in again"))
+                    val pair =
+                        authService.refresh(request.refreshToken)
+                            ?: return@post call.respond(HttpStatusCode.Unauthorized, ApiError("invalid_refresh_token", "Sign in again"))
                     call.respond(AuthResponse(pair.accessToken, pair.refreshToken, pair.expiresInSeconds))
                 }
             }
             authenticate("auth-jwt") {
                 get("/me/preferences") {
                     val userId = requireNotNull(call.principal<UserPrincipal>()).userId
-                    val preferences = dataSource.connection.use { connection ->
-                        connection.prepareStatement("SELECT payload FROM user_preferences WHERE user_id = ?::uuid").use { statement ->
-                            statement.setString(1, userId)
-                            statement.executeQuery().use { rows ->
-                                if (rows.next()) Json.decodeFromString<UserPreferencesDto>(rows.getString(1)) else UserPreferencesDto()
+                    val preferences =
+                        dataSource.connection.use { connection ->
+                            connection.prepareStatement("SELECT payload FROM user_preferences WHERE user_id = ?::uuid").use { statement ->
+                                statement.setString(1, userId)
+                                statement.executeQuery().use { rows ->
+                                    if (rows.next()) Json.decodeFromString<UserPreferencesDto>(rows.getString(1)) else UserPreferencesDto()
+                                }
                             }
                         }
-                    }
                     call.respond(preferences)
                 }
                 rateLimit(RateLimitName("write")) {
                     put("/me/preferences") {
                         val userId = requireNotNull(call.principal<UserPrincipal>()).userId
                         val preferences = call.receive<UserPreferencesDto>()
-                        require(listOf(preferences.bookmarks, preferences.preferences).all { items ->
-                            items.size <= 200 && items.all { it.isNotBlank() && it.length <= 200 }
-                        }) { "invalid_preferences" }
+                        require(
+                            listOf(preferences.bookmarks, preferences.preferences).all { items ->
+                                items.size <= 200 && items.all { it.isNotBlank() && it.length <= 200 }
+                            },
+                        ) { "invalid_preferences" }
                         dataSource.connection.use { connection ->
-                            connection.prepareStatement(
-                                "INSERT INTO user_preferences (user_id, payload) VALUES (?::uuid, ?::jsonb) " +
-                                    "ON CONFLICT (user_id) DO UPDATE SET payload = EXCLUDED.payload",
-                            ).use { statement ->
-                                statement.setString(1, userId)
-                                statement.setString(2, Json.encodeToString(preferences))
-                                statement.executeUpdate()
-                            }
+                            connection
+                                .prepareStatement(
+                                    "INSERT INTO user_preferences (user_id, payload) VALUES (?::uuid, ?::jsonb) " +
+                                        "ON CONFLICT (user_id) DO UPDATE SET payload = EXCLUDED.payload",
+                                ).use { statement ->
+                                    statement.setString(1, userId)
+                                    statement.setString(2, Json.encodeToString(preferences))
+                                    statement.executeUpdate()
+                                }
                             connection.commit()
                         }
                         call.respond(HttpStatusCode.NoContent)
@@ -153,14 +216,16 @@ fun Application.module(config: AppConfig = AppConfig.fromEnvironment()) {
                 }
                 get("/me") {
                     val userId = requireNotNull(call.principal<UserPrincipal>()).userId
-                    val organizer = dataSource.connection.use { connection ->
-                        connection.prepareStatement(
-                            "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ?::uuid AND role = 'ORGANIZER')",
-                        ).use { statement ->
-                            statement.setString(1, userId)
-                            statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
+                    val organizer =
+                        dataSource.connection.use { connection ->
+                            connection
+                                .prepareStatement(
+                                    "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ?::uuid AND role = 'ORGANIZER')",
+                                ).use { statement ->
+                                    statement.setString(1, userId)
+                                    statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
+                                }
                         }
-                    }
                     call.respond(mapOf("id" to userId, "role" to if (organizer) "ORGANIZER" else "ATTENDEE"))
                 }
                 ventDemoRoutes(AccessControl(dataSource), checkInTokens, ScheduleRepository(dataSource))
