@@ -132,7 +132,7 @@ On an Apple Silicon Mac with Xcode and an iOS simulator installed:
 
    struct ContentView: UIViewControllerRepresentable {
        func makeUIViewController(context: Context) -> UIViewController {
-           MainViewControllerKt.MainViewController()
+           MainViewControllerKt.mainViewController()
        }
 
        func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}

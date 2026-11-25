@@ -20,10 +20,20 @@ private external fun stopBrowserCamera()
 private external fun readBrowserCamera(): String
 
 @kotlin.js.JsFun("(left, top, width, height) => window.eventsCamera.bounds(left, top, width, height)")
-private external fun positionBrowserCamera(left: Double, top: Double, width: Double, height: Double)
+private external fun positionBrowserCamera(
+    left: Double,
+    top: Double,
+    width: Double,
+    height: Double,
+)
 
 @Composable
-internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit, onClose: () -> Unit, onManual: () -> Unit) {
+internal actual fun CheckInCamera(
+    modifier: Modifier,
+    onCode: (String) -> Unit,
+    onClose: () -> Unit,
+    onManual: () -> Unit,
+) {
     val codeCallback by rememberUpdatedState(onCode)
     val closeCallback by rememberUpdatedState(onClose)
     val manualCallback by rememberUpdatedState(onManual)
@@ -43,9 +53,15 @@ internal actual fun CheckInCamera(modifier: Modifier, onCode: (String) -> Unit, 
             delay(100)
         }
     }
-    Box(modifier.onGloballyPositioned {
-        val bounds = it.boundsInWindow()
-        positionBrowserCamera((bounds.left / density).toDouble(), (bounds.top / density).toDouble(),
-            (bounds.width / density).toDouble(), (bounds.height / density).toDouble())
-    })
+    Box(
+        modifier.onGloballyPositioned {
+            val bounds = it.boundsInWindow()
+            positionBrowserCamera(
+                (bounds.left / density).toDouble(),
+                (bounds.top / density).toDouble(),
+                (bounds.width / density).toDouble(),
+                (bounds.height / density).toDouble(),
+            )
+        },
+    )
 }

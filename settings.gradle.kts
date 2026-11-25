@@ -1,11 +1,18 @@
 pluginManagement {
-    repositories { google(); gradlePluginPortal(); mavenCentral() }
+    repositories {
+        google()
+        gradlePluginPortal()
+        mavenCentral()
+    }
 }
 dependencyResolutionManagement {
     // Kotlin/Wasm registers the official Node.js distribution as an Ivy
     // project repository for kotlinWasmNodeJsSetup.
     repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 rootProject.name = "vent"
 include(":shared-domain", ":shared-api", ":server", ":composeApp", ":androidApp")

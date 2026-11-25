@@ -9,4 +9,7 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.ktlint) apply false
 }
-allprojects { group = "app.vent"; version = "1.0.0-demo" }
+allprojects {
+    group = "app.vent"
+    version = "1.0.0-demo"
+}

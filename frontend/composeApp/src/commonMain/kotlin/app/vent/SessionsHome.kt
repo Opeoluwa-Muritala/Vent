@@ -1,20 +1,18 @@
 package app.vent
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,17 +20,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import app.vent.composeapp.generated.resources.*
 import app.vent.ui.theme.spacing
-import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
+internal fun SessionsHome(
+    ui: VentUiState,
+    dispatch: (VentAction) -> Unit,
+) {
     val pager = rememberPagerState { ui.eventDays }
     val scope = rememberCoroutineScope()
     val space = MaterialTheme.spacing
@@ -49,43 +46,70 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth().padding(horizontal = space.lg)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (organizer) ui.eventTitle else "Today", Modifier.weight(1f), style = MaterialTheme.typography.headlineLarge,
-                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(
+                        if (organizer) ui.eventTitle else "Today",
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineLarge,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                     IconButton({
                         searchOpen = !searchOpen
                         if (!searchOpen) search = ""
-                    }) { Icon(if (searchOpen) Icons.Outlined.Close else Icons.Outlined.Search, if (searchOpen) "Close search" else "Search sessions") }
+                    }) {
+                        Icon(
+                            if (searchOpen) Icons.Outlined.Close else Icons.Outlined.Search,
+                            if (searchOpen) "Close search" else "Search sessions",
+                        )
+                    }
                     IconButton({ dispatch(VentAction.Navigate(VentScreen.PROFILE)) }) {
-                        Surface(Modifier.size(space.huge), shape = androidx.compose.foundation.shape.CircleShape,
-                            color = scheme.secondaryContainer) {
+                        Surface(
+                            Modifier.size(space.huge),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = scheme.secondaryContainer,
+                        ) {
                             Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Person, "Profile") }
                         }
                     }
                 }
                 if (searchOpen) {
-                    OutlinedTextField(search, { search = it },
-                        Modifier.fillMaxWidth(), placeholder = { Text("Search sessions") }, singleLine = true)
+                    OutlinedTextField(
+                        search,
+                        { search = it },
+                        Modifier.fillMaxWidth(),
+                        placeholder = { Text("Search sessions") },
+                        singleLine = true,
+                    )
                 }
             }
             VentPillTabs(List(ui.eventDays) { "Day ${it + 1}" }, pager.currentPage) { page ->
                 scope.launch { pager.animateScrollToPage(page) }
             }
             HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top) { page ->
-                val sessions = (SummitSession.entries + ui.sessionDetails.keys).distinct().filter { session ->
-                    val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
-                    details.day == page + 1 && listOf(details.title, details.speaker, details.room).any { it.contains(search, ignoreCase = true) }
-                }
+                val sessions =
+                    (SummitSession.entries + ui.sessionDetails.keys).distinct().filter { session ->
+                        val details =
+                            ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
+                        details.day == page + 1 &&
+                            listOf(details.title, details.speaker, details.room).any { it.contains(search, ignoreCase = true) }
+                    }
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = space.lg, end = space.lg, top = space.sm,
-                        bottom = if (organizer) space.heroIcon + space.lg else space.sm),
+                    contentPadding =
+                        PaddingValues(
+                            start = space.lg,
+                            end = space.lg,
+                            top = space.sm,
+                            bottom = if (organizer) space.heroIcon + space.lg else space.sm,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(space.md),
                 ) {
                     if (sessions.isEmpty()) item { Text(if (search.isBlank()) "No sessions scheduled" else "No matching sessions") }
                     sessions.groupBy { sessionStartLabel(ui.sessionDetails[it]?.time ?: it.time) }.forEach { (time, concurrent) ->
                         item(key = "time:$time") { Text(time, style = MaterialTheme.typography.labelLarge) }
                         items(concurrent, key = { it.name }) { session ->
-                            val details = ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
+                            val details =
+                                ui.sessionDetails[session] ?: SessionDetails(session.title, session.time, session.room, session.speaker)
                             SessionScheduleCard(
                                 details = details,
                                 featured = session == SummitSession.KEYNOTE,
@@ -113,9 +137,13 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
         }
     }
     if (createSession && organizer) {
-        EditSessionDialog(SessionDetails("", "", "", "", day = pager.currentPage + 1), { createSession = false },
-            creating = true, eventDays = ui.eventDays,
-            halls = (SummitSession.entries + ui.sessionDetails.keys).map { ui.sessionDetails[it]?.room ?: it.room }.distinct()) {
+        EditSessionDialog(
+            SessionDetails("", "", "", "", day = pager.currentPage + 1),
+            { createSession = false },
+            creating = true,
+            eventDays = ui.eventDays,
+            halls = (SummitSession.entries + ui.sessionDetails.keys).map { ui.sessionDetails[it]?.room ?: it.room }.distinct(),
+        ) {
             dispatch(VentAction.CreateSession(it))
             createSession = false
         }
@@ -123,11 +151,18 @@ internal fun SessionsHome(ui: VentUiState, dispatch: (VentAction) -> Unit) {
 }
 
 @Composable
-internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+internal fun VentPillTabs(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
     val space = MaterialTheme.spacing
     val scheme = MaterialTheme.colorScheme
     Row(
-        Modifier.fillMaxWidth().selectableGroup().horizontalScroll(rememberScrollState())
+        Modifier
+            .fillMaxWidth()
+            .selectableGroup()
+            .horizontalScroll(rememberScrollState())
             .padding(horizontal = space.lg, vertical = space.xs),
         horizontalArrangement = Arrangement.spacedBy(space.xs),
     ) {
@@ -138,7 +173,8 @@ internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (I
                 if (selected) requester.bringIntoView()
             }
             Surface(
-                Modifier.clip(MaterialTheme.shapes.extraLarge)
+                Modifier
+                    .clip(MaterialTheme.shapes.extraLarge)
                     .bringIntoViewRequester(requester)
                     .selectable(selected, role = Role.Tab, onClick = { onSelect(index) })
                     .heightIn(min = space.touch),
@@ -154,6 +190,9 @@ internal fun VentPillTabs(labels: List<String>, selectedIndex: Int, onSelect: (I
     }
 }
 
-
 internal fun sessionStartLabel(time: String): String =
-    time.trim().split(Regex("\\s*(?:[–—]|\\s-\\s)\\s*"), limit = 2).first().trim()
+    time
+        .trim()
+        .split(Regex("\\s*(?:[–—]|\\s-\\s)\\s*"), limit = 2)
+        .first()
+        .trim()

@@ -1,9 +1,9 @@
 package app.vent.server
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres
+import org.flywaydb.core.Flyway
 import java.time.Instant
 import java.time.OffsetDateTime
-import org.flywaydb.core.Flyway
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,7 +13,11 @@ class SeedTest {
     fun seedCreatesOneDemoScheduleAcrossRepeatedRuns() {
         EmbeddedPostgres.start().use { postgres ->
             val source = postgres.postgresDatabase
-            Flyway.configure().dataSource(source).load().migrate()
+            Flyway
+                .configure()
+                .dataSource(source)
+                .load()
+                .migrate()
             source.connection.use { connection ->
                 val now = Instant.parse("2026-11-19T12:00:00Z")
                 seedDemo(connection, now)

@@ -5,7 +5,9 @@ package app.vent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 
-@kotlin.js.JsFun("() => { if (document.fullscreenElement || !document.documentElement.requestFullscreen) return false; document.documentElement.requestFullscreen().catch(() => {}); return true; }")
+@kotlin.js.JsFun(
+    "() => { if (document.fullscreenElement || !document.documentElement.requestFullscreen) return false; document.documentElement.requestFullscreen().catch(() => {}); return true; }",
+)
 private external fun enterPassFullscreen(): Boolean
 
 @kotlin.js.JsFun("() => { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); }")

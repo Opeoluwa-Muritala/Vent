@@ -6,9 +6,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class SeatMapHitTest {
-    private val seats = initialVenueRows().first().seats.take(2).mapIndexed { index, seat ->
-        MapSeat(seat, Offset(index * 48f, 0f))
-    }
+    private val seats =
+        initialVenueRows().first().seats.take(2).mapIndexed { index, seat ->
+            MapSeat(seat, Offset(index * 48f, 0f))
+        }
 
     @Test fun closestSeatWinsWithinTheMinimumTouchRadius() {
         assertEquals(seats.first(), nearestMapSeat(seats, Offset(20f, 0f), 22f))

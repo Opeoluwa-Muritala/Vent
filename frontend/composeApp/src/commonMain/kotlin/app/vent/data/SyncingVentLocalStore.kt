@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-internal class SyncingVentLocalStore(private val local: VentLocalStore, private val api: VentApi) : VentLocalStore {
+internal class SyncingVentLocalStore(
+    private val local: VentLocalStore,
+    private val api: VentApi,
+) : VentLocalStore {
     private val lock = Mutex()
     private val syncLock = Mutex()
     private val updates = MutableSharedFlow<VentLocalState>(replay = 1)
@@ -16,33 +19,41 @@ internal class SyncingVentLocalStore(private val local: VentLocalStore, private 
 
     override suspend fun load(): VentLocalState = lock.withLock { loadLocked() }
 
-    override suspend fun save(state: VentLocalState) = lock.withLock {
-        val previous = loadLocked()
-        val pending = previous.settings.preferencesPendingSync || previous.preferences() != state.preferences()
-        store(state.copy(settings = state.settings.copy(preferencesPendingSync = pending)))
-    }
+    override suspend fun save(state: VentLocalState) =
+        lock.withLock {
+            val previous = loadLocked()
+            val pending = previous.settings.preferencesPendingSync || previous.preferences() != state.preferences()
+            store(state.copy(settings = state.settings.copy(preferencesPendingSync = pending)))
+        }
 
-    suspend fun syncPreferences() = syncLock.withLock {
-        val before = load()
-        val pending = before.settings.preferencesPendingSync
-        val preferences = before.preferences()
-        val remote = if (pending) {
-            api.savePreferences(preferences)
-            preferences
-        } else {
-            api.loadPreferences()
+    suspend fun syncPreferences() =
+        syncLock.withLock {
+            val before = load()
+            val pending = before.settings.preferencesPendingSync
+            val preferences = before.preferences()
+            val remote =
+                if (pending) {
+                    api.savePreferences(preferences)
+                    preferences
+                } else {
+                    api.loadPreferences()
+                }
+            lock.withLock applyResult@{
+                val latest = loadLocked()
+                if (latest.preferences() != preferences || latest.settings.preferencesPendingSync != pending) return@applyResult
+                if (!pending && remote == preferences) return@applyResult
+                store(
+                    latest.copy(
+                        settings =
+                            latest.settings.copy(
+                                bookmarks = remote.bookmarks,
+                                preferences = remote.preferences,
+                                preferencesPendingSync = false,
+                            ),
+                    ),
+                )
+            }
         }
-        lock.withLock applyResult@{
-            val latest = loadLocked()
-            if (latest.preferences() != preferences || latest.settings.preferencesPendingSync != pending) return@applyResult
-            if (!pending && remote == preferences) return@applyResult
-            store(latest.copy(settings = latest.settings.copy(
-                bookmarks = remote.bookmarks,
-                preferences = remote.preferences,
-                preferencesPendingSync = false,
-            )))
-        }
-    }
 
     private suspend fun loadLocked(): VentLocalState = current ?: local.load().also { current = it }
 

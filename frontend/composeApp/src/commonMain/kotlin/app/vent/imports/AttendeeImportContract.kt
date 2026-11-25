@@ -13,14 +13,25 @@ data class AttendeeImportState(
 enum class AttendeeFilter { ALL, UNSEATED, ACCESS }
 
 sealed interface AttendeeImportIntent {
-    data class Search(val query: String) : AttendeeImportIntent
-    data class SelectFilter(val filter: AttendeeFilter) : AttendeeImportIntent
+    data class Search(
+        val query: String,
+    ) : AttendeeImportIntent
+
+    data class SelectFilter(
+        val filter: AttendeeFilter,
+    ) : AttendeeImportIntent
+
     data object StartImport : AttendeeImportIntent
+
     data object ReviewMapping : AttendeeImportIntent
+
     data object Back : AttendeeImportIntent
+
     data object ConfirmImport : AttendeeImportIntent
 }
 
 sealed interface AttendeeImportEffect {
-    data class ImportCompleted(val count: Int) : AttendeeImportEffect
+    data class ImportCompleted(
+        val count: Int,
+    ) : AttendeeImportEffect
 }

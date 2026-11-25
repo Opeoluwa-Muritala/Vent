@@ -14,40 +14,56 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+ktlint {
+    filter {
+        exclude("**/build/**")
+    }
+}
+
 val backendUrl = providers.environmentVariable("BACKEND_URL").orElse("")
 val mobileBackendUrl = providers.gradleProperty("VENT_MOBILE_BACKEND_URL").orElse(backendUrl)
 val backendConfigDirectory = layout.buildDirectory.dir("generated/vent/backendConfig")
-val generateBackendConfig = tasks.register("generateBackendConfig") {
-    inputs.property("backendUrl", backendUrl)
-    inputs.property("mobileBackendUrl", mobileBackendUrl)
-    outputs.dir(backendConfigDirectory)
-    doLast {
-        fun validatedOrigin(raw: String, setting: String): String {
-            val value = raw.trim().removeSuffix("/")
-            if (value.isEmpty()) return value
-            val uri = runCatching { URI(value) }.getOrNull()
-            require(
-                uri != null && uri.host != null && uri.rawUserInfo == null &&
-                    uri.rawPath.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null &&
-                    (uri.port == -1 || uri.port in 1..65535) &&
-                    (uri.scheme == "https" ||
-                        (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "[::1]"))) &&
-                    value.matches(Regex("[A-Za-z0-9:/._\\[\\]\\-]+")),
-            ) { "$setting must be an HTTPS origin, or an HTTP loopback origin for local development." }
-            return value
+val generateBackendConfig =
+    tasks.register("generateBackendConfig") {
+        inputs.property("backendUrl", backendUrl)
+        inputs.property("mobileBackendUrl", mobileBackendUrl)
+        outputs.dir(backendConfigDirectory)
+        doLast {
+            fun validatedOrigin(
+                raw: String,
+                setting: String,
+            ): String {
+                val value = raw.trim().removeSuffix("/")
+                if (value.isEmpty()) return value
+                val uri = runCatching { URI(value) }.getOrNull()
+                require(
+                    uri != null &&
+                        uri.host != null &&
+                        uri.rawUserInfo == null &&
+                        uri.rawPath.isNullOrEmpty() &&
+                        uri.rawQuery == null &&
+                        uri.rawFragment == null &&
+                        (uri.port == -1 || uri.port in 1..65535) &&
+                        (
+                            uri.scheme == "https" ||
+                                (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "[::1]"))
+                        ) &&
+                        value.matches(Regex("[A-Za-z0-9:/._\\[\\]\\-]+")),
+                ) { "$setting must be an HTTPS origin, or an HTTP loopback origin for local development." }
+                return value
+            }
+            val properties = inputs.properties
+            val webOrigin = validatedOrigin(properties.getValue("backendUrl") as String, "BACKEND_URL")
+            val mobileOrigin = validatedOrigin(properties.getValue("mobileBackendUrl") as String, "VENT_MOBILE_BACKEND_URL")
+            val output = outputs.files.singleFile.resolve("BackendConfig.kt")
+            output.parentFile.mkdirs()
+            output.writeText(
+                "package app.vent.data\n\n" +
+                    "internal const val CONFIGURED_BACKEND_URL = \"$webOrigin\"\n" +
+                    "internal const val CONFIGURED_MOBILE_BACKEND_URL = \"$mobileOrigin\"\n",
+            )
         }
-        val properties = inputs.properties
-        val webOrigin = validatedOrigin(properties.getValue("backendUrl") as String, "BACKEND_URL")
-        val mobileOrigin = validatedOrigin(properties.getValue("mobileBackendUrl") as String, "VENT_MOBILE_BACKEND_URL")
-        val output = outputs.files.singleFile.resolve("BackendConfig.kt")
-        output.parentFile.mkdirs()
-        output.writeText(
-            "package app.vent.data\n\n" +
-                "internal const val CONFIGURED_BACKEND_URL = \"$webOrigin\"\n" +
-                "internal const val CONFIGURED_MOBILE_BACKEND_URL = \"$mobileOrigin\"\n",
-        )
     }
-}
 
 kotlin {
     android {
@@ -59,9 +75,13 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
-    iosArm64(); iosSimulatorArm64()
+    iosArm64()
+    iosSimulatorArm64()
     targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
-        binaries.framework { baseName = "VentKit"; isStatic = true }
+        binaries.framework {
+            baseName = "VentKit"
+            isStatic = true
+        }
     }
     wasmJs {
         browser { commonWebpackConfig { outputFileName = "vent.js" } }
@@ -117,32 +137,36 @@ detekt {
     allRules = false
 }
 
-val detektDesign = tasks.register("detektDesign") {
-    group = "verification"
-    description = "Checks Vent UI source for design-system violations."
-    doLast {
-        val themeSegment = "ui${File.separator}theme"
-        val sources = fileTree("src") { include("**/*.kt") }
-        val rules = mapOf(
-            "hardcoded dp" to Regex("""\b\d+\.dp\b"""),
-            "hardcoded sp" to Regex("""\b\d+\.sp\b"""),
-            "hardcoded color" to Regex("""Color\(0x[0-9A-Fa-f]+\)"""),
-            "filler copy" to Regex("""(?i)(Lorem ipsum|Lightning fast|Powered by AI|Get started in seconds|Beautiful and intuitive)"""),
-            "decorative loop" to Regex("""rememberInfiniteTransition"""),
-        )
-        val violations = buildList {
-            sources.filter { !it.path.contains(themeSegment) }.forEach { source ->
-                val text = source.readText()
-                rules.forEach { (label, regex) ->
-                    regex.findAll(text).forEach { match ->
-                        val line = text.take(match.range.first).count { it == '\n' } + 1
-                        add("${source.relativeTo(rootDir)}:$line [$label] ${match.value}")
+val detektDesign =
+    tasks.register("detektDesign") {
+        group = "verification"
+        description = "Checks Vent UI source for design-system violations."
+        doLast {
+            val themeSegment = "ui${File.separator}theme"
+            val sources = fileTree("src") { include("**/*.kt") }
+            val rules =
+                mapOf(
+                    "hardcoded dp" to Regex("""\b\d+\.dp\b"""),
+                    "hardcoded sp" to Regex("""\b\d+\.sp\b"""),
+                    "hardcoded color" to Regex("""Color\(0x[0-9A-Fa-f]+\)"""),
+                    "filler copy" to
+                        Regex("""(?i)(Lorem ipsum|Lightning fast|Powered by AI|Get started in seconds|Beautiful and intuitive)"""),
+                    "decorative loop" to Regex("""rememberInfiniteTransition"""),
+                )
+            val violations =
+                buildList {
+                    sources.filter { !it.path.contains(themeSegment) }.forEach { source ->
+                        val text = source.readText()
+                        rules.forEach { (label, regex) ->
+                            regex.findAll(text).forEach { match ->
+                                val line = text.take(match.range.first).count { it == '\n' } + 1
+                                add("${source.relativeTo(rootDir)}:$line [$label] ${match.value}")
+                            }
+                        }
                     }
                 }
-            }
+            check(violations.isEmpty()) { "Vent design rule violations:\n${violations.joinToString("\n")}" }
         }
-        check(violations.isEmpty()) { "Vent design rule violations:\n${violations.joinToString("\n")}" }
     }
-}
 
 tasks.matching { it.name == "check" }.configureEach { dependsOn(detektDesign) }

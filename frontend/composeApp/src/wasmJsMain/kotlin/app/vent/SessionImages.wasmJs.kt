@@ -7,4 +7,7 @@ import androidx.compose.ui.Modifier
 internal actual fun rememberSessionImagePicker(onRead: (String?) -> Unit): (() -> Unit)? = null
 
 @Composable
-internal actual fun SessionHeaderImage(image: String?, modifier: Modifier) = DefaultSessionHeader(modifier)
+internal actual fun SessionHeaderImage(
+    image: String?,
+    modifier: Modifier,
+) = DefaultSessionHeader(modifier)
